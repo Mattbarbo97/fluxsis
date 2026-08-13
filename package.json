@@ -1,0 +1,12 @@
+{
+  "name": "fluxsis",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:bot": "npm run dev --workspace=apps/whatsapp-bot"
+  }
+}

@@ -15,8 +15,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-neutral-950 text-white">
-      <aside className="w-56 shrink-0 border-r border-neutral-800 p-4">
+    <div className="flex h-screen overflow-hidden bg-neutral-950 text-white">
+      <aside className="flex w-56 shrink-0 flex-col overflow-y-auto border-r border-neutral-800 p-4">
         <div className="mb-6 px-2 text-lg font-semibold">FluxSis</div>
         <nav className="space-y-1">
           {NAV_ITEMS.map((item) => (
@@ -29,11 +29,11 @@ export default function DashboardLayout({
             </Link>
           ))}
         </nav>
-        <div className="mt-8 px-2">
+        <div className="mt-auto px-2 pt-8">
           <LogoutButton />
         </div>
       </aside>
-      <main className="flex-1 p-6">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
     </div>
   );
 }

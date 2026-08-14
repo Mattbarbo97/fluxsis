@@ -1,16 +1,30 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
+import { getCurrentTenantId } from "@/lib/tenant";
 import KanbanBoard from "@/components/KanbanBoard";
+import NewOrderModalButton from "@/components/NewOrderModalButton";
 
 export default async function PedidosPage() {
   const supabase = await createClient();
+  const tenantId = await getCurrentTenantId();
 
-  const { data: orders, error } = await supabase
-    .from("orders")
-    .select(
-      "id, order_number, total, payment_status, order_status, customers(name, phone)"
-    )
-    .order("created_at", { ascending: false });
+  const [{ data: orders, error }, { data: customers }, { data: products }] =
+    await Promise.all([
+      supabase
+        .from("orders")
+        .select(
+          "id, order_number, total, payment_status, order_status, customers(name, phone)"
+        )
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("customers")
+        .select("id, name, phone")
+        .order("name", { ascending: true }),
+      supabase
+        .from("products")
+        .select("id, name, price, volume")
+        .eq("status", "ACTIVE")
+        .order("name", { ascending: true }),
+    ]);
 
   return (
     <div>
@@ -21,12 +35,13 @@ export default async function PedidosPage() {
             Acompanhe o pedido do início ao fim.
           </p>
         </div>
-        <Link
-          href="/dashboard/pedidos/novo"
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          + Novo pedido
-        </Link>
+        {tenantId && (
+          <NewOrderModalButton
+            tenantId={tenantId}
+            customers={customers ?? []}
+            products={products ?? []}
+          />
+        )}
       </div>
 
       {error && (

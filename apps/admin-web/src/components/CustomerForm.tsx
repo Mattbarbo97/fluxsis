@@ -20,9 +20,11 @@ const EMPTY: CustomerFormValues = {
 export default function CustomerForm({
   tenantId,
   initialCustomer,
+  onSuccess,
 }: {
   tenantId: string;
   initialCustomer?: CustomerFormValues;
+  onSuccess?: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -64,8 +66,12 @@ export default function CustomerForm({
       return;
     }
 
-    router.push("/dashboard/clientes");
-    router.refresh();
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push("/dashboard/clientes");
+      router.refresh();
+    }
   }
 
   return (
@@ -124,7 +130,7 @@ export default function CustomerForm({
         </button>
         <button
           type="button"
-          onClick={() => router.push("/dashboard/clientes")}
+          onClick={() => (onSuccess ? onSuccess() : router.push("/dashboard/clientes"))}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-neutral-300 hover:bg-neutral-800"
         >
           Cancelar

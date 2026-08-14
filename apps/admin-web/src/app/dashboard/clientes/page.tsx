@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
+import { getCurrentTenantId } from "@/lib/tenant";
 import CustomerTable from "@/components/CustomerTable";
+import NewCustomerModalButton from "@/components/NewCustomerModalButton";
 
 export default async function ClientesPage() {
   const supabase = await createClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: customers, error } = await supabase
     .from("customers")
@@ -17,12 +19,7 @@ export default async function ClientesPage() {
           <h1 className="mb-1 text-xl font-semibold">Clientes</h1>
           <p className="text-sm text-neutral-400">Base de clientes (CRM).</p>
         </div>
-        <Link
-          href="/dashboard/clientes/novo"
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          + Novo cliente
-        </Link>
+        {tenantId && <NewCustomerModalButton tenantId={tenantId} />}
       </div>
 
       {error && (

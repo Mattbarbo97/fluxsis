@@ -33,9 +33,11 @@ const EMPTY: ProductFormValues = {
 export default function ProductForm({
   tenantId,
   initialProduct,
+  onSuccess,
 }: {
   tenantId: string;
   initialProduct?: ProductFormValues;
+  onSuccess?: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -98,8 +100,12 @@ export default function ProductForm({
       return;
     }
 
-    router.push("/dashboard/estoque");
-    router.refresh();
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push("/dashboard/estoque");
+      router.refresh();
+    }
   }
 
   return (
@@ -272,7 +278,7 @@ export default function ProductForm({
         </button>
         <button
           type="button"
-          onClick={() => router.push("/dashboard/estoque")}
+          onClick={() => (onSuccess ? onSuccess() : router.push("/dashboard/estoque"))}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-neutral-300 hover:bg-neutral-800"
         >
           Cancelar

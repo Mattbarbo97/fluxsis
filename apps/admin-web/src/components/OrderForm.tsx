@@ -16,10 +16,12 @@ export default function OrderForm({
   tenantId,
   customers,
   products,
+  onSuccess,
 }: {
   tenantId: string;
   customers: Customer[];
   products: Product[];
+  onSuccess?: () => void;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -123,8 +125,12 @@ export default function OrderForm({
       return;
     }
 
-    router.push("/dashboard/pedidos");
-    router.refresh();
+    if (onSuccess) {
+      onSuccess();
+    } else {
+      router.push("/dashboard/pedidos");
+      router.refresh();
+    }
   }
 
   return (
@@ -270,7 +276,7 @@ export default function OrderForm({
         </button>
         <button
           type="button"
-          onClick={() => router.push("/dashboard/pedidos")}
+          onClick={() => (onSuccess ? onSuccess() : router.push("/dashboard/pedidos"))}
           className="rounded-lg border border-neutral-700 px-4 py-2 text-neutral-300 hover:bg-neutral-800"
         >
           Cancelar

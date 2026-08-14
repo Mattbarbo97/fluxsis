@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase";
 
 type Order = {
@@ -12,16 +12,18 @@ type Order = {
   customers: { name: string | null; phone: string } | null;
 };
 
-const COLUMNS: { key: string; label: string }[] = [
-  { key: "NEW", label: "Novos" },
-  { key: "AWAITING_PAYMENT", label: "Aguard. pagamento" },
-  { key: "CONFIRMED", label: "Confirmado" },
-  { key: "PREPARING", label: "Separação" },
-  { key: "READY", label: "Pronto" },
-  { key: "OUT_FOR_DELIVERY", label: "Em rota" },
-  { key: "DELIVERED", label: "Entregue" },
-  { key: "CANCELLED", label: "Cancelado" },
+const COLUMNS: { key: string; label: string; accent: string; header: string }[] = [
+  { key: "NEW", label: "Novos", accent: "border-t-sky-500", header: "text-sky-400" },
+  { key: "AWAITING_PAYMENT", label: "Aguard. pagamento", accent: "border-t-amber-500", header: "text-amber-400" },
+  { key: "CONFIRMED", label: "Confirmado", accent: "border-t-indigo-500", header: "text-indigo-400" },
+  { key: "PREPARING", label: "Separação", accent: "border-t-purple-500", header: "text-purple-400" },
+  { key: "READY", label: "Pronto", accent: "border-t-cyan-500", header: "text-cyan-400" },
+  { key: "OUT_FOR_DELIVERY", label: "Em rota", accent: "border-t-orange-500", header: "text-orange-400" },
+  { key: "DELIVERED", label: "Entregue", accent: "border-t-emerald-500", header: "text-emerald-400" },
+  { key: "CANCELLED", label: "Cancelado", accent: "border-t-red-500", header: "text-red-400" },
 ];
+
+const PAGE_SIZE = 6;
 
 const PAYMENT_LABEL: Record<string, string> = {
   PENDING: "Pendente",
@@ -43,6 +45,8 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
   const supabase = createClient();
   const [rows, setRows] = useState(orders);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
 
   async function updateStatus(id: string, order_status: string) {
     setSavingId(id);
@@ -59,69 +63,112 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
     setSavingId(null);
   }
 
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((o) => {
+      const name = (o.customers?.name || o.customers?.phone || "").toLowerCase();
+      return name.includes(term) || String(o.order_number).includes(term);
+    });
+  }, [rows, search]);
+
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {COLUMNS.map((col) => {
-        const columnOrders = rows.filter((o) => o.order_status === col.key);
-        return (
-          <div key={col.key} className="w-72 shrink-0">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h2 className="text-sm font-medium text-neutral-300">
-                {col.label}
-              </h2>
-              <span className="text-xs text-neutral-500">
-                {columnOrders.length}
-              </span>
-            </div>
+    <div>
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Buscar por cliente ou nº do pedido..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-72 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+        />
+      </div>
 
-            <div className="space-y-2">
-              {columnOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    <span className="text-sm font-medium text-white">
-                      #{order.order_number}
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {COLUMNS.map((col) => {
+          const columnOrders = filteredRows.filter(
+            (o) => o.order_status === col.key
+          );
+          const limit = visibleCount[col.key] ?? PAGE_SIZE;
+          const visible = columnOrders.slice(0, limit);
+          const hasMore = columnOrders.length > limit;
+
+          return (
+            <div key={col.key} className="w-72 shrink-0">
+              <div
+                className={`mb-2 flex items-center justify-between border-t-2 ${col.accent} px-1 pt-2`}
+              >
+                <h2 className={`text-sm font-medium ${col.header}`}>
+                  {col.label}
+                </h2>
+                <span className="text-xs text-neutral-500">
+                  {columnOrders.length}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {visible.map((order) => (
+                  <div
+                    key={order.id}
+                    className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+                  >
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm font-medium text-white">
+                        #{order.order_number}
+                      </span>
+                      <span className="text-sm text-emerald-400">
+                        R$ {order.total.toFixed(2)}
+                      </span>
+                    </div>
+                    <p className="mb-2 truncate text-xs text-neutral-400">
+                      {order.customers?.name || order.customers?.phone || "—"}
+                    </p>
+                    <span
+                      className={`mb-2 inline-block rounded-full px-2 py-0.5 text-xs ${
+                        PAYMENT_COLOR[order.payment_status]
+                      }`}
+                    >
+                      {PAYMENT_LABEL[order.payment_status]}
                     </span>
-                    <span className="text-sm text-emerald-400">
-                      R$ {order.total.toFixed(2)}
-                    </span>
+                    <select
+                      value={order.order_status}
+                      disabled={savingId === order.id}
+                      onChange={(e) => updateStatus(order.id, e.target.value)}
+                      className="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-white outline-none focus:border-emerald-500"
+                    >
+                      {COLUMNS.map((c) => (
+                        <option key={c.key} value={c.key}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <p className="mb-2 text-xs text-neutral-400">
-                    {order.customers?.name || order.customers?.phone || "—"}
-                  </p>
-                  <span
-                    className={`mb-2 inline-block rounded-full px-2 py-0.5 text-xs ${
-                      PAYMENT_COLOR[order.payment_status]
-                    }`}
-                  >
-                    {PAYMENT_LABEL[order.payment_status]}
-                  </span>
-                  <select
-                    value={order.order_status}
-                    disabled={savingId === order.id}
-                    onChange={(e) => updateStatus(order.id, e.target.value)}
-                    className="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-white outline-none focus:border-emerald-500"
-                  >
-                    {COLUMNS.map((c) => (
-                      <option key={c.key} value={c.key}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+                ))}
 
-              {columnOrders.length === 0 && (
-                <div className="rounded-lg border border-dashed border-neutral-800 p-4 text-center text-xs text-neutral-600">
-                  Vazio
-                </div>
-              )}
+                {hasMore && (
+                  <button
+                    onClick={() =>
+                      setVisibleCount((prev) => ({
+                        ...prev,
+                        [col.key]: limit + PAGE_SIZE,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-dashed border-neutral-700 py-2 text-xs text-neutral-400 hover:border-neutral-500 hover:text-white"
+                  >
+                    Ver mais ({columnOrders.length - limit})
+                  </button>
+                )}
+
+                {columnOrders.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-neutral-800 p-4 text-center text-xs text-neutral-600">
+                    Vazio
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

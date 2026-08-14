@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
+import { getCurrentTenantId } from "@/lib/tenant";
 import StockTable from "@/components/StockTable";
+import NewProductModalButton from "@/components/NewProductModalButton";
 
 export default async function EstoquePage() {
   const supabase = await createClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data: products, error } = await supabase
     .from("products")
@@ -21,12 +23,7 @@ export default async function EstoquePage() {
             Produtos cadastrados e quantidade disponível.
           </p>
         </div>
-        <Link
-          href="/dashboard/estoque/novo"
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          + Novo produto
-        </Link>
+        {tenantId && <NewProductModalButton tenantId={tenantId} />}
       </div>
 
       {error && (

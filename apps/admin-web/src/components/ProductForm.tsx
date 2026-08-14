@@ -9,8 +9,10 @@ type ProductFormValues = {
   id?: string;
   name: string;
   sku: string;
+  barcode: string;
   volume: string;
   price: string;
+  cost_price: string;
   stock_quantity: string;
   min_stock: string;
   status: string;
@@ -19,8 +21,10 @@ type ProductFormValues = {
 const EMPTY: ProductFormValues = {
   name: "",
   sku: "",
+  barcode: "",
   volume: "",
   price: "",
+  cost_price: "",
   stock_quantity: "0",
   min_stock: "0",
   status: "ACTIVE",
@@ -72,8 +76,10 @@ export default function ProductForm({
       tenant_id: tenantId,
       name: values.name,
       sku: values.sku || null,
+      barcode: values.barcode || null,
       volume: values.volume || null,
       price: Number(values.price),
+      cost_price: values.cost_price ? Number(values.cost_price) : null,
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
       status: values.status,
@@ -144,21 +150,33 @@ export default function ProductForm({
         </div>
         <div>
           <label className="mb-1 block text-sm text-neutral-300">
-            Volume
+            Código de barras
           </label>
           <input
-            value={values.volume}
-            onChange={(e) => handleChange("volume", e.target.value)}
+            value={values.barcode}
+            onChange={(e) => handleChange("barcode", e.target.value)}
             className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
-            placeholder="Ex: 350ml"
+            placeholder="EAN/GTIN"
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div>
+        <label className="mb-1 block text-sm text-neutral-300">
+          Volume
+        </label>
+        <input
+          value={values.volume}
+          onChange={(e) => handleChange("volume", e.target.value)}
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
+          placeholder="Ex: 350ml"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm text-neutral-300">
-            Preço (R$) *
+            Preço de venda (R$) *
           </label>
           <input
             required
@@ -170,6 +188,40 @@ export default function ProductForm({
             className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
           />
         </div>
+        <div>
+          <label className="mb-1 block text-sm text-neutral-300">
+            Preço de compra (R$)
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={values.cost_price}
+            onChange={(e) => handleChange("cost_price", e.target.value)}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
+            placeholder="Opcional"
+          />
+        </div>
+      </div>
+
+      {values.price && values.cost_price && Number(values.cost_price) > 0 && (
+        <p className="text-sm text-neutral-400">
+          Margem estimada:{" "}
+          <span className="text-emerald-400">
+            R${" "}
+            {(Number(values.price) - Number(values.cost_price)).toFixed(2)}{" "}
+            (
+            {(
+              ((Number(values.price) - Number(values.cost_price)) /
+                Number(values.price)) *
+              100
+            ).toFixed(1)}
+            %)
+          </span>
+        </p>
+      )}
+
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm text-neutral-300">
             Estoque

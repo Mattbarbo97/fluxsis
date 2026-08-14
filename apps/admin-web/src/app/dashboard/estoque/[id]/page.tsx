@@ -14,7 +14,9 @@ export default async function EditarProdutoPage({
 
   const { data: product } = await supabase
     .from("products")
-    .select("id, name, sku, volume, price, stock_quantity, min_stock, status")
+    .select(
+      "id, name, sku, barcode, volume, price, cost_price, stock_quantity, min_stock, status"
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -32,8 +34,10 @@ export default async function EditarProdutoPage({
           id: product.id,
           name: product.name,
           sku: product.sku ?? "",
+          barcode: product.barcode ?? "",
           volume: product.volume ?? "",
           price: String(product.price),
+          cost_price: product.cost_price ? String(product.cost_price) : "",
           stock_quantity: String(product.stock_quantity),
           min_stock: String(product.min_stock),
           status: product.status,

@@ -10,6 +10,7 @@ type Product = {
   sku: string | null;
   volume: string | null;
   price: number;
+  cost_price: number | null;
   stock_quantity: number;
   min_stock: number;
   status: string;
@@ -48,6 +49,7 @@ export default function StockTable({ products }: { products: Product[] }) {
             <th className="px-4 py-3 font-medium">SKU</th>
             <th className="px-4 py-3 font-medium">Volume</th>
             <th className="px-4 py-3 font-medium">Preço</th>
+            <th className="px-4 py-3 font-medium">Margem</th>
             <th className="px-4 py-3 font-medium">Estoque</th>
             <th className="px-4 py-3 font-medium">Status</th>
           </tr>
@@ -73,6 +75,24 @@ export default function StockTable({ products }: { products: Product[] }) {
                 </td>
                 <td className="px-4 py-3 text-neutral-400">
                   R$ {product.price.toFixed(2)}
+                </td>
+                <td className="px-4 py-3">
+                  {product.cost_price ? (
+                    <span className="text-emerald-400">
+                      R$ {(product.price - product.cost_price).toFixed(2)}{" "}
+                      <span className="text-neutral-500">
+                        (
+                        {(
+                          ((product.price - product.cost_price) /
+                            product.price) *
+                          100
+                        ).toFixed(0)}
+                        %)
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-neutral-600">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <input

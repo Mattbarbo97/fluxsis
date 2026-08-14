@@ -4,6 +4,7 @@ import LogoutButton from "@/components/LogoutButton";
 const NAV_ITEMS = [
   { href: "/dashboard/estoque", label: "Estoque" },
   { href: "/dashboard/pedidos", label: "Pedidos" },
+  { href: "/dashboard/clientes", label: "Clientes" },
   { href: "/dashboard/entregas", label: "Entregas" },
   { href: "/dashboard/mensagens", label: "Mensagens" },
 ];

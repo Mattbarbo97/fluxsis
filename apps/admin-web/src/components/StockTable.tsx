@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
 type Product = {
@@ -56,7 +57,14 @@ export default function StockTable({ products }: { products: Product[] }) {
             const isLow = product.stock_quantity <= product.min_stock;
             return (
               <tr key={product.id}>
-                <td className="px-4 py-3 text-white">{product.name}</td>
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/dashboard/estoque/${product.id}`}
+                    className="text-white hover:text-emerald-400 hover:underline"
+                  >
+                    {product.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-neutral-400">
                   {product.sku ?? "—"}
                 </td>

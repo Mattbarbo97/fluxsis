@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import OrderDetailModal from "@/components/OrderDetailModal";
 
 type Order = {
   id: string;
@@ -43,10 +45,12 @@ const PAYMENT_COLOR: Record<string, string> = {
 
 export default function KanbanBoard({ orders }: { orders: Order[] }) {
   const supabase = createClient();
+  const router = useRouter();
   const [rows, setRows] = useState(orders);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
 
   async function updateStatus(id: string, order_status: string) {
     setSavingId(id);
@@ -110,7 +114,8 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
                 {visible.map((order) => (
                   <div
                     key={order.id}
-                    className="rounded-lg border border-neutral-800 bg-neutral-900 p-3"
+                    onClick={() => setDetailOrderId(order.id)}
+                    className="cursor-pointer rounded-lg border border-neutral-800 bg-neutral-900 p-3 hover:border-neutral-600"
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span className="text-sm font-medium text-white">
@@ -133,6 +138,7 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
                     <select
                       value={order.order_status}
                       disabled={savingId === order.id}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => updateStatus(order.id, e.target.value)}
                       className="mt-2 w-full rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs text-white outline-none focus:border-emerald-500"
                     >
@@ -169,6 +175,13 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
           );
         })}
       </div>
+
+      <OrderDetailModal
+        orderId={detailOrderId}
+        open={detailOrderId !== null}
+        onClose={() => setDetailOrderId(null)}
+        onUpdated={() => router.refresh()}
+      />
     </div>
   );
 }

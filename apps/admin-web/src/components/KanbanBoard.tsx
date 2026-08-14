@@ -84,7 +84,7 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
         />
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2 lg:grid-cols-4">
         {COLUMNS.map((col) => {
           const columnOrders = filteredRows.filter(
             (o) => o.order_status === col.key
@@ -94,7 +94,7 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
           const hasMore = columnOrders.length > limit;
 
           return (
-            <div key={col.key} className="w-72 shrink-0">
+            <div key={col.key} className="min-w-0">
               <div
                 className={`mb-2 flex items-center justify-between border-t-2 ${col.accent} px-1 pt-2`}
               >

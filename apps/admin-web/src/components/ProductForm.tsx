@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import { BEVERAGE_CATALOG } from "@/lib/beverage-catalog";
 
 type ProductFormValues = {
   id?: string;
@@ -40,6 +41,7 @@ export default function ProductForm({
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const isEditing = Boolean(initialProduct?.id);
 
@@ -49,6 +51,17 @@ export default function ProductForm({
   ) {
     setValues((prev) => ({ ...prev, [field]: value }));
   }
+
+  function handleSelectSuggestion(name: string, volume: string) {
+    setValues((prev) => ({ ...prev, name, volume }));
+  }
+
+  const suggestions =
+    values.name.trim().length > 0
+      ? BEVERAGE_CATALOG.filter((item) =>
+          item.name.toLowerCase().includes(values.name.trim().toLowerCase())
+        ).slice(0, 6)
+      : [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,15 +98,39 @@ export default function ProductForm({
 
   return (
     <form onSubmit={handleSubmit} className="max-w-lg space-y-4">
-      <div>
+      <div className="relative">
         <label className="mb-1 block text-sm text-neutral-300">Nome *</label>
         <input
           required
           value={values.name}
-          onChange={(e) => handleChange("name", e.target.value)}
+          onChange={(e) => {
+            handleChange("name", e.target.value);
+            setShowSuggestions(true);
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          autoComplete="off"
           className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
           placeholder="Ex: Heineken 350ml"
         />
+        {showSuggestions && suggestions.length > 0 && (
+          <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-lg">
+            {suggestions.map((item, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onMouseDown={() =>
+                    handleSelectSuggestion(item.name, item.volume)
+                  }
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-neutral-200 hover:bg-neutral-800"
+                >
+                  <span>{item.name}</span>
+                  <span className="text-neutral-500">{item.volume}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

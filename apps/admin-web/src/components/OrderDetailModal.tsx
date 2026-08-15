@@ -15,6 +15,7 @@ type OrderDetail = {
   notes: string | null;
   payment_status: string;
   payment_method: string | null;
+  proof_url: string | null;
   order_status: string;
   customers: { name: string | null; phone: string } | null;
   order_items: {
@@ -63,6 +64,7 @@ export default function OrderDetailModal({
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("PIX_MANUAL");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function OrderDetailModal({
     supabase
       .from("orders")
       .select(
-        "id, tenant_id, order_number, subtotal, discount, delivery_fee, total, notes, payment_status, payment_method, order_status, customers(name, phone), order_items(id, quantity, unit_price, products(name, volume))"
+        "id, tenant_id, order_number, subtotal, discount, delivery_fee, total, notes, payment_status, payment_method, proof_url, order_status, customers(name, phone), order_items(id, quantity, unit_price, products(name, volume))"
       )
       .eq("id", orderId)
       .single()
@@ -88,6 +90,58 @@ export default function OrderDetailModal({
         setLoading(false);
       });
   }, [open, orderId]);
+
+  async function handleProofUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !order) return;
+
+    setUploading(true);
+    setError(null);
+
+    const path = `${order.tenant_id}/${order.id}-${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from("proofs")
+      .upload(path, file);
+
+    if (uploadError) {
+      setError(
+        "Erro ao enviar comprovante: " +
+          uploadError.message +
+          ". Verifique se o bucket 'proofs' foi criado no Supabase."
+      );
+      setUploading(false);
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("proofs")
+      .getPublicUrl(path);
+
+    const newStatus =
+      order.payment_status === "PENDING" ? "PROOF_SENT" : order.payment_status;
+
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        proof_url: publicUrlData.publicUrl,
+        payment_status: newStatus,
+      })
+      .eq("id", order.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      setUploading(false);
+      return;
+    }
+
+    setOrder({
+      ...order,
+      proof_url: publicUrlData.publicUrl,
+      payment_status: newStatus,
+    });
+    setUploading(false);
+    onUpdated();
+  }
 
   async function setPaymentStatus(status: string) {
     if (!order) return;
@@ -214,6 +268,36 @@ export default function OrderDetailModal({
               Obs: <span className="text-neutral-300">{order.notes}</span>
             </p>
           )}
+
+          <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+            <p className="mb-2 text-sm text-neutral-300">
+              Comprovante de pagamento
+            </p>
+            {order.proof_url && (
+              <a
+                href={order.proof_url}
+                target="_blank"
+                rel="noreferrer"
+                className="mb-2 block"
+              >
+                <img
+                  src={order.proof_url}
+                  alt="Comprovante"
+                  className="max-h-40 rounded-lg border border-neutral-700"
+                />
+              </a>
+            )}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleProofUpload}
+              disabled={uploading}
+              className="block w-full text-xs text-neutral-400 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-800 file:px-3 file:py-1.5 file:text-xs file:text-white hover:file:bg-neutral-700"
+            />
+            {uploading && (
+              <p className="mt-1 text-xs text-neutral-500">Enviando...</p>
+            )}
+          </div>
 
           <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
             <div className="mb-3 flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { BEVERAGE_CATALOG } from "@/lib/beverage-catalog";
@@ -16,6 +16,7 @@ type ProductFormValues = {
   stock_quantity: string;
   min_stock: string;
   status: string;
+  category_id: string;
 };
 
 const EMPTY: ProductFormValues = {
@@ -28,6 +29,7 @@ const EMPTY: ProductFormValues = {
   stock_quantity: "0",
   min_stock: "0",
   status: "ACTIVE",
+  category_id: "",
 };
 
 export default function ProductForm({
@@ -48,6 +50,15 @@ export default function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("categories")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .then(({ data }) => setCategories(data ?? []));
+  }, []);
 
   const isEditing = Boolean(initialProduct?.id);
 
@@ -85,6 +96,7 @@ export default function ProductForm({
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
       status: values.status,
+      category_id: values.category_id || null,
     };
 
     const { error } = isEditing
@@ -252,6 +264,24 @@ export default function ProductForm({
             className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm text-neutral-300">
+          Categoria
+        </label>
+        <select
+          value={values.category_id}
+          onChange={(e) => handleChange("category_id", e.target.value)}
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
+        >
+          <option value="">Sem categoria</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div>

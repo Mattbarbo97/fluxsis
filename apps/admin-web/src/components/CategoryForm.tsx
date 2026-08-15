@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { getCurrentTenantIdClient } from "@/lib/tenant-client";
 
 export default function CategoryForm({
-  tenantId,
   onSuccess,
 }: {
-  tenantId: string;
   onSuccess: () => void;
 }) {
   const supabase = createClient();
@@ -19,6 +18,16 @@ export default function CategoryForm({
     e.preventDefault();
     setSaving(true);
     setError(null);
+
+    const tenantId = await getCurrentTenantIdClient(supabase);
+
+    if (!tenantId) {
+      setError(
+        "Não foi possível identificar seu tenant. Verifique se seu usuário está vinculado a um tenant (tabela tenant_members)."
+      );
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("categories")

@@ -2,21 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { getCurrentTenantIdClient } from "@/lib/tenant-client";
 import CategoryForm from "@/components/CategoryForm";
 
 type Category = { id: string; name: string };
 
 export default function CategoriasPage() {
   const supabase = createClient();
-  const [tenantId, setTenantId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
-    const tid = await getCurrentTenantIdClient(supabase);
-    setTenantId(tid);
     const { data } = await supabase
       .from("categories")
       .select("id, name")
@@ -42,11 +38,9 @@ export default function CategoriasPage() {
         Organize seus produtos por categoria.
       </p>
 
-      {tenantId && (
-        <div className="mb-6 max-w-md">
-          <CategoryForm tenantId={tenantId} onSuccess={load} />
-        </div>
-      )}
+      <div className="mb-6 max-w-md">
+        <CategoryForm onSuccess={load} />
+      </div>
 
       {loading && <p className="text-sm text-neutral-500">Carregando...</p>}
 

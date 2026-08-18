@@ -29,8 +29,12 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
-  const isLoginRoute = request.nextUrl.pathname.startsWith("/login");
+  const path = request.nextUrl.pathname;
+  const isDashboardRoute = path.startsWith("/dashboard");
+  const isLoginRoute = path === "/login";
+  const isEntregadorRoute =
+    path.startsWith("/entregador") && path !== "/entregador/login";
+  const isEntregadorLoginRoute = path === "/entregador/login";
 
   if (!user && isDashboardRoute) {
     const url = request.nextUrl.clone();
@@ -44,9 +48,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (!user && isEntregadorRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/entregador/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isEntregadorLoginRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/entregador";
+    return NextResponse.redirect(url);
+  }
+
   return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/login", "/entregador/:path*"],
 };

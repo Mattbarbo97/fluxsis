@@ -121,6 +121,24 @@ export default function ComandaModal({
     setBusy(false);
   }
 
+  async function changeItemQuantity(itemId: string, delta: number) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    const newQty = item.quantity + delta;
+
+    setBusy(true);
+    if (newQty <= 0) {
+      await supabase.from("comanda_items").delete().eq("id", itemId);
+    } else {
+      await supabase
+        .from("comanda_items")
+        .update({ quantity: newQty })
+        .eq("id", itemId);
+    }
+    await load();
+    setBusy(false);
+  }
+
   async function updatePeopleCount(value: number) {
     if (!comandaId) return;
     setPeopleCount(value);
@@ -186,6 +204,17 @@ export default function ComandaModal({
 
       {!loading && (
         <div className="space-y-4">
+          {comandaId && (
+            <button
+              onClick={() =>
+                window.open(`/imprimir/comanda/${comandaId}`, "_blank")
+              }
+              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-white hover:bg-neutral-800"
+            >
+              🖨️ Imprimir conta
+            </button>
+          )}
+
           <div className="rounded-lg border border-neutral-800">
             <table className="w-full text-left text-sm">
               <thead className="bg-neutral-900 text-neutral-400">
@@ -203,7 +232,23 @@ export default function ComandaModal({
                       {item.products?.name}
                     </td>
                     <td className="px-3 py-2 text-neutral-400">
-                      {item.quantity}
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => changeItemQuantity(item.id, -1)}
+                          disabled={busy}
+                          className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800 disabled:opacity-50"
+                        >
+                          −
+                        </button>
+                        <span className="w-6 text-center">{item.quantity}</span>
+                        <button
+                          onClick={() => changeItemQuantity(item.id, 1)}
+                          disabled={busy}
+                          className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800 disabled:opacity-50"
+                        >
+                          +
+                        </button>
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-neutral-300">
                       R$ {(item.unit_price * item.quantity).toFixed(2)}

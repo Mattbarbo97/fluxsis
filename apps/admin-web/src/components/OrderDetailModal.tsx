@@ -199,11 +199,21 @@ export default function OrderDetailModal({
 
       {order && !loading && (
         <div className="space-y-4">
-          <div>
-            <p className="text-sm text-neutral-400">Cliente</p>
-            <p className="text-white">
-              {order.customers?.name || order.customers?.phone || "—"}
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-neutral-400">Cliente</p>
+              <p className="text-white">
+                {order.customers?.name || order.customers?.phone || "—"}
+              </p>
+            </div>
+            <button
+              onClick={() =>
+                window.open(`/imprimir/pedido/${order.id}`, "_blank")
+              }
+              className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-white hover:bg-neutral-800"
+            >
+              🖨️ Imprimir
+            </button>
           </div>
 
           <div className="rounded-lg border border-neutral-800">

@@ -31,12 +31,13 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isDashboardRoute = path.startsWith("/dashboard");
+  const isImprimirRoute = path.startsWith("/imprimir");
   const isLoginRoute = path === "/login";
   const isEntregadorRoute =
     path.startsWith("/entregador") && path !== "/entregador/login";
   const isEntregadorLoginRoute = path === "/entregador/login";
 
-  if (!user && isDashboardRoute) {
+  if (!user && (isDashboardRoute || isImprimirRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -64,5 +65,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/entregador/:path*"],
+  matcher: ["/dashboard/:path*", "/login", "/entregador/:path*", "/imprimir/:path*"],
 };

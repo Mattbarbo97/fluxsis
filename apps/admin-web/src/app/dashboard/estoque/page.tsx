@@ -10,7 +10,7 @@ export default async function EstoquePage() {
   const { data: products, error } = await supabase
     .from("products")
     .select(
-      "id, name, sku, volume, price, cost_price, stock_quantity, min_stock, status"
+      "id, name, sku, volume, price, cost_price, stock_quantity, min_stock, status, categories(name)"
     )
     .order("name", { ascending: true });
 
@@ -38,7 +38,9 @@ export default async function EstoquePage() {
         </p>
       )}
 
-      {products && products.length > 0 && <StockTable products={products} />}
+      {products && products.length > 0 && (
+        <StockTable products={products as any} />
+      )}
     </div>
   );
 }

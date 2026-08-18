@@ -51,13 +51,41 @@ export default function ProductForm({
   const [saving, setSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
 
-  useEffect(() => {
-    supabase
+  async function loadCategories() {
+    const { data } = await supabase
       .from("categories")
       .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => setCategories(data ?? []));
+      .order("name", { ascending: true });
+    setCategories(data ?? []);
+  }
+
+  async function handleAddCategory() {
+    if (!newCategoryName.trim()) return;
+    setSavingCategory(true);
+
+    const { data, error } = await supabase
+      .from("categories")
+      .insert({ tenant_id: tenantId, name: newCategoryName.trim() })
+      .select("id, name")
+      .single();
+
+    if (!error && data) {
+      setCategories((prev) =>
+        [...prev, data].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      handleChange("category_id", data.id);
+      setNewCategoryName("");
+      setAddingCategory(false);
+    }
+    setSavingCategory(false);
+  }
+
+  useEffect(() => {
+    loadCategories();
   }, []);
 
   const isEditing = Boolean(initialProduct?.id);
@@ -267,9 +295,43 @@ export default function ProductForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm text-neutral-300">
-          Categoria
-        </label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="block text-sm text-neutral-300">Categoria</label>
+          <button
+            type="button"
+            onClick={() => setAddingCategory((v) => !v)}
+            className="text-xs text-emerald-400 hover:text-emerald-300"
+          >
+            {addingCategory ? "Cancelar" : "+ Nova categoria"}
+          </button>
+        </div>
+
+        {addingCategory && (
+          <div className="mb-2 flex gap-2">
+            <input
+              autoFocus
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddCategory();
+                }
+              }}
+              placeholder="Ex: Sucos"
+              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+            />
+            <button
+              type="button"
+              onClick={handleAddCategory}
+              disabled={savingCategory || !newCategoryName.trim()}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {savingCategory ? "..." : "Adicionar"}
+            </button>
+          </div>
+        )}
+
         <select
           value={values.category_id}
           onChange={(e) => handleChange("category_id", e.target.value)}

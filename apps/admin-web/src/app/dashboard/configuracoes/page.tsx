@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { getCurrentTenantId } from "@/lib/tenant";
 import WhatsappConfigForm from "@/components/WhatsappConfigForm";
+import ResetTicketCounterButton from "@/components/ResetTicketCounterButton";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Ativo",
@@ -72,6 +73,12 @@ export default async function ConfiguracoesPage() {
             WhatsApp
           </h2>
           <WhatsappConfigForm tenantId={tenantId} />
+        </div>
+      )}
+
+      {tenantId && (
+        <div className="mb-6">
+          <ResetTicketCounterButton tenantId={tenantId} />
         </div>
       )}
 

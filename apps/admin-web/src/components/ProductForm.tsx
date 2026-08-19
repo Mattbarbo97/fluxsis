@@ -13,6 +13,7 @@ type ProductFormValues = {
   volume: string;
   price: string;
   cost_price: string;
+  composition: string;
   stock_quantity: string;
   min_stock: string;
   status: string;
@@ -26,6 +27,7 @@ const EMPTY: ProductFormValues = {
   volume: "",
   price: "",
   cost_price: "",
+  composition: "",
   stock_quantity: "0",
   min_stock: "0",
   status: "ACTIVE",
@@ -121,6 +123,7 @@ export default function ProductForm({
       volume: values.volume || null,
       price: Number(values.price),
       cost_price: values.cost_price ? Number(values.cost_price) : null,
+      composition: values.composition || null,
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
       status: values.status,
@@ -248,6 +251,22 @@ export default function ProductForm({
             placeholder="Opcional"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm text-neutral-300">
+          Composição padrão (opcional)
+        </label>
+        <input
+          value={values.composition}
+          onChange={(e) => handleChange("composition", e.target.value)}
+          placeholder="Ex: Arroz, Feijão, Costela, Farofa"
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
+        />
+        <p className="mt-1 text-xs text-neutral-500">
+          Separe por vírgula. No Pedido Rápido, o atendente poderá remover
+          itens (ex: "sem farofa") na hora de montar o pedido.
+        </p>
       </div>
 
       {values.price && values.cost_price && Number(values.cost_price) > 0 && (

@@ -4,8 +4,21 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { getCurrentTenantIdClient } from "@/lib/tenant-client";
+import Modal from "@/components/Modal";
 
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = {
+  id: string;
+  name: string;
+  price: number;
+  volume: string | null;
+  composition: string | null;
+};
+
+type CartItem = {
+  product: Product;
+  quantity: number;
+  notes: string | null;
+};
 
 const PAYMENT_METHODS = [
   { value: "CASH_ON_DELIVERY", label: "Dinheiro" },
@@ -21,15 +34,20 @@ export default function PedidoRapidoPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState("CASH_ON_DELIVERY");
+  const [customerName, setCustomerName] = useState("");
+  const [gerarSenha, setGerarSenha] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const [compositionProduct, setCompositionProduct] = useState<Product | null>(null);
+  const [compositionChecked, setCompositionChecked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     supabase
       .from("products")
-      .select("id, name, price, volume")
+      .select("id, name, price, volume, composition")
       .eq("status", "ACTIVE")
       .order("name")
       .then(({ data }) => {
@@ -44,35 +62,74 @@ export default function PedidoRapidoPage() {
     return products.filter((p) => p.name.toLowerCase().includes(term));
   }, [products, search]);
 
-  function addToCart(productId: string) {
-    setCart((prev) => ({ ...prev, [productId]: (prev[productId] ?? 0) + 1 }));
+  function addSimple(product: Product) {
+    setCart((prev) => {
+      const idx = prev.findIndex(
+        (i) => i.product.id === product.id && !i.notes
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        return next;
+      }
+      return [...prev, { product, quantity: 1, notes: null }];
+    });
   }
 
-  function changeQty(productId: string, delta: number) {
+  function openCompositionPicker(product: Product) {
+    const items = product.composition!.split(",").map((s) => s.trim());
+    const initial: Record<string, boolean> = {};
+    items.forEach((i) => (initial[i] = true));
+    setCompositionChecked(initial);
+    setCompositionProduct(product);
+  }
+
+  function confirmComposition() {
+    if (!compositionProduct) return;
+    const removed = Object.entries(compositionChecked)
+      .filter(([, checked]) => !checked)
+      .map(([name]) => name);
+    const notes = removed.length > 0 ? `SEM: ${removed.join(", ")}` : null;
+
     setCart((prev) => {
-      const newQty = (prev[productId] ?? 0) + delta;
-      const next = { ...prev };
+      const idx = prev.findIndex(
+        (i) => i.product.id === compositionProduct.id && i.notes === notes
+      );
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        return next;
+      }
+      return [...prev, { product: compositionProduct, quantity: 1, notes }];
+    });
+    setCompositionProduct(null);
+  }
+
+  function handleProductClick(product: Product) {
+    if (product.composition) {
+      openCompositionPicker(product);
+    } else {
+      addSimple(product);
+    }
+  }
+
+  function changeQty(index: number, delta: number) {
+    setCart((prev) => {
+      const next = [...prev];
+      const newQty = next[index].quantity + delta;
       if (newQty <= 0) {
-        delete next[productId];
+        next.splice(index, 1);
       } else {
-        next[productId] = newQty;
+        next[index] = { ...next[index], quantity: newQty };
       }
       return next;
     });
   }
 
-  const cartItems = Object.entries(cart).map(([productId, quantity]) => {
-    const product = products.find((p) => p.id === productId)!;
-    return { product, quantity };
-  });
-
-  const total = cartItems.reduce(
-    (sum, i) => sum + i.product.price * i.quantity,
-    0
-  );
+  const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
 
   async function finalizeSale() {
-    if (cartItems.length === 0) return;
+    if (cart.length === 0) return;
     setSaving(true);
 
     const tenantId = await getCurrentTenantIdClient(supabase);
@@ -81,7 +138,6 @@ export default function PedidoRapidoPage() {
       return;
     }
 
-    // Cliente "balcão" genérico — cria se ainda não existir para este tenant.
     let { data: customer } = await supabase
       .from("customers")
       .select("id")
@@ -98,11 +154,21 @@ export default function PedidoRapidoPage() {
       customer = newCustomer;
     }
 
+    let ticketNumber: number | null = null;
+    if (gerarSenha) {
+      const { data } = await supabase.rpc("next_ticket_number", {
+        p_tenant_id: tenantId,
+      });
+      ticketNumber = data ?? null;
+    }
+
     const { data: order } = await supabase
       .from("orders")
       .insert({
         tenant_id: tenantId,
         customer_id: customer!.id,
+        customer_display_name: customerName || null,
+        ticket_number: ticketNumber,
         subtotal: total,
         total,
         payment_status: "CONFIRMED",
@@ -114,17 +180,19 @@ export default function PedidoRapidoPage() {
 
     if (order) {
       await supabase.from("order_items").insert(
-        cartItems.map((i) => ({
+        cart.map((i) => ({
           tenant_id: tenantId,
           order_id: order.id,
           product_id: i.product.id,
           quantity: i.quantity,
           unit_price: i.product.price,
+          notes: i.notes,
         }))
       );
 
       window.open(`/imprimir/pedido/${order.id}`, "_blank");
-      setCart({});
+      setCart([]);
+      setCustomerName("");
     }
 
     setSaving(false);
@@ -157,12 +225,15 @@ export default function PedidoRapidoPage() {
           {filteredProducts.map((p) => (
             <button
               key={p.id}
-              onClick={() => addToCart(p.id)}
+              onClick={() => handleProductClick(p)}
               className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-left hover:border-emerald-600"
             >
               <p className="text-sm font-medium text-white">{p.name}</p>
               {p.volume && (
                 <p className="text-xs text-neutral-500">{p.volume}</p>
+              )}
+              {p.composition && (
+                <p className="text-xs text-amber-400">🍽️ personalizável</p>
               )}
               <p className="mt-1 text-sm text-emerald-400">
                 R$ {p.price.toFixed(2)}
@@ -172,37 +243,42 @@ export default function PedidoRapidoPage() {
         </div>
       </div>
 
-      <div className="mt-6 w-full shrink-0 md:mt-0 md:w-80">
+      <div className="mt-6 w-full shrink-0 md:mt-0 md:w-96">
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
           <h2 className="mb-3 text-sm font-medium text-neutral-300">
             Carrinho
           </h2>
 
-          {cartItems.length === 0 && (
+          {cart.length === 0 && (
             <p className="text-sm text-neutral-500">Nenhum item ainda.</p>
           )}
 
           <div className="space-y-2">
-            {cartItems.map(({ product, quantity }) => (
-              <div key={product.id} className="flex items-center justify-between text-sm">
-                <span className="text-white">{product.name}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => changeQty(product.id, -1)}
-                    className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800"
-                  >
-                    −
-                  </button>
-                  <span className="w-4 text-center text-neutral-300">
-                    {quantity}
-                  </span>
-                  <button
-                    onClick={() => changeQty(product.id, 1)}
-                    className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800"
-                  >
-                    +
-                  </button>
+            {cart.map((item, index) => (
+              <div key={index} className="text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-white">{item.product.name}</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => changeQty(index, -1)}
+                      className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800"
+                    >
+                      −
+                    </button>
+                    <span className="w-4 text-center text-neutral-300">
+                      {item.quantity}
+                    </span>
+                    <button
+                      onClick={() => changeQty(index, 1)}
+                      className="h-6 w-6 rounded border border-neutral-700 text-white hover:bg-neutral-800"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
+                {item.notes && (
+                  <p className="text-xs text-amber-400">{item.notes}</p>
+                )}
               </div>
             ))}
           </div>
@@ -211,6 +287,28 @@ export default function PedidoRapidoPage() {
             <span>Total</span>
             <span>R$ {total.toFixed(2)}</span>
           </div>
+
+          <div className="mt-3">
+            <label className="mb-1 block text-xs text-neutral-400">
+              Nome do cliente (opcional)
+            </label>
+            <input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Ex: João"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <label className="mt-3 flex items-center gap-2 text-sm text-neutral-300">
+            <input
+              type="checkbox"
+              checked={gerarSenha}
+              onChange={(e) => setGerarSenha(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-600 bg-neutral-900"
+            />
+            Gerar senha (imprime via estabelecimento + cliente)
+          </label>
 
           <div className="mt-3">
             <label className="mb-1 block text-xs text-neutral-400">
@@ -231,13 +329,53 @@ export default function PedidoRapidoPage() {
 
           <button
             onClick={finalizeSale}
-            disabled={saving || cartItems.length === 0}
+            disabled={saving || cart.length === 0}
             className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {saving ? "Finalizando..." : "Finalizar venda"}
           </button>
         </div>
       </div>
+
+      <Modal
+        open={compositionProduct !== null}
+        onClose={() => setCompositionProduct(null)}
+        title={compositionProduct?.name ?? ""}
+      >
+        <p className="mb-3 text-sm text-neutral-400">
+          Desmarque o que o cliente não quer:
+        </p>
+        <div className="space-y-2">
+          {compositionProduct?.composition?.split(",").map((item) => {
+            const name = item.trim();
+            return (
+              <label
+                key={name}
+                className="flex items-center gap-2 text-sm text-white"
+              >
+                <input
+                  type="checkbox"
+                  checked={compositionChecked[name] ?? true}
+                  onChange={(e) =>
+                    setCompositionChecked((prev) => ({
+                      ...prev,
+                      [name]: e.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 rounded border-neutral-600 bg-neutral-900"
+                />
+                {name}
+              </label>
+            );
+          })}
+        </div>
+        <button
+          onClick={confirmComposition}
+          className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+        >
+          Adicionar ao carrinho
+        </button>
+      </Modal>
     </div>
   );
 }

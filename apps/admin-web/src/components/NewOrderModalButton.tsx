@@ -6,7 +6,7 @@ import Modal from "@/components/Modal";
 import OrderForm from "@/components/OrderForm";
 
 type Customer = { id: string; name: string | null; phone: string };
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
 
 export default function NewOrderModalButton({
   tenantId,

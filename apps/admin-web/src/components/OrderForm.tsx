@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
 type Customer = { id: string; name: string | null; phone: string };
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
 
 type LineItem = {
   productId: string;
@@ -82,7 +82,22 @@ export default function OrderForm({
       return;
     }
 
+    // Validação client-side (a garantia de verdade é a função adjust_stock no banco).
+    for (const item of validItems) {
+      const product = products.find((p) => p.id === item.productId)!;
+      if (item.quantity > product.stock_quantity) {
+        setError(
+          `Estoque insuficiente de "${product.name}" (disponível: ${product.stock_quantity}).`
+        );
+        return;
+      }
+    }
+
     setSaving(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -123,6 +138,24 @@ export default function OrderForm({
       setError(itemsError.message);
       setSaving(false);
       return;
+    }
+
+    // Baixa o estoque de cada item — a função no banco garante que não vende
+    // além do disponível, mesmo com dois atendentes vendendo ao mesmo tempo.
+    for (const item of validItems) {
+      const { error: stockError } = await supabase.rpc("adjust_stock", {
+        p_tenant_id: tenantId,
+        p_product_id: item.productId,
+        p_delta: -item.quantity,
+        p_movement_type: "OUT",
+        p_reference_order_id: order.id,
+        p_created_by: user?.id ?? null,
+      });
+      if (stockError) {
+        setError(
+          `Pedido criado, mas houve um problema ao baixar o estoque: ${stockError.message}`
+        );
+      }
     }
 
     if (onSuccess) {

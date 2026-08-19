@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import Modal from "@/components/Modal";
 
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
 
 type ComandaItem = {
   id: string;
+  product_id: string;
   quantity: number;
   unit_price: number;
   products: { name: string; volume: string | null } | null;
@@ -52,6 +53,7 @@ export default function ComandaModal({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("PIX_MANUAL");
   const [busy, setBusy] = useState(false);
+  const [tenantId, setTenantId] = useState<string | null>(null);
 
   async function load() {
     if (!comandaId) return;
@@ -61,12 +63,12 @@ export default function ComandaModal({
       await Promise.all([
         supabase
           .from("comandas")
-          .select("people_count")
+          .select("people_count, tenant_id")
           .eq("id", comandaId)
           .single(),
         supabase
           .from("comanda_items")
-          .select("id, quantity, unit_price, products(name, volume)")
+          .select("id, product_id, quantity, unit_price, products(name, volume)")
           .eq("comanda_id", comandaId),
         supabase
           .from("comanda_payments")
@@ -75,6 +77,7 @@ export default function ComandaModal({
       ]);
 
     setPeopleCount(comanda?.people_count ?? 1);
+    setTenantId(comanda?.tenant_id ?? null);
     setItems((itemsData as any) ?? []);
     setPayments(paymentsData ?? []);
     setLoading(false);
@@ -96,13 +99,40 @@ export default function ComandaModal({
   const perPerson = peopleCount > 0 ? subtotal / peopleCount : subtotal;
 
   async function addItem() {
-    if (!comandaId || !newProductId) return;
+    if (!comandaId || !newProductId || !tenantId) return;
     const product = products.find((p) => p.id === newProductId);
     if (!product) return;
 
+    if (newQuantity > product.stock_quantity) {
+      setError(
+        `Estoque insuficiente de "${product.name}" (disponível: ${product.stock_quantity}).`
+      );
+      return;
+    }
+    setError(null);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     setBusy(true);
+
+    const { error: stockError } = await supabase.rpc("adjust_stock", {
+      p_tenant_id: tenantId,
+      p_product_id: product.id,
+      p_delta: -newQuantity,
+      p_movement_type: "OUT",
+      p_created_by: user?.id ?? null,
+    });
+
+    if (stockError) {
+      setError(stockError.message);
+      setBusy(false);
+      return;
+    }
+
     await supabase.from("comanda_items").insert({
-      tenant_id: (await supabase.from("comandas").select("tenant_id").eq("id", comandaId).single()).data?.tenant_id,
+      tenant_id: tenantId,
       comanda_id: comandaId,
       product_id: product.id,
       quantity: newQuantity,
@@ -115,7 +145,18 @@ export default function ComandaModal({
   }
 
   async function removeItem(itemId: string) {
+    const item = items.find((i) => i.id === itemId);
+    if (!item || !tenantId) return;
+
     setBusy(true);
+
+    await supabase.rpc("adjust_stock", {
+      p_tenant_id: tenantId,
+      p_product_id: item.product_id,
+      p_delta: item.quantity,
+      p_movement_type: "IN",
+    });
+
     await supabase.from("comanda_items").delete().eq("id", itemId);
     await load();
     setBusy(false);
@@ -123,10 +164,30 @@ export default function ComandaModal({
 
   async function changeItemQuantity(itemId: string, delta: number) {
     const item = items.find((i) => i.id === itemId);
-    if (!item) return;
+    if (!item || !tenantId) return;
     const newQty = item.quantity + delta;
 
+    // delta > 0 (aumentando quantidade) precisa checar disponibilidade.
+    if (delta > 0) {
+      const product = products.find((p) => p.id === item.product_id);
+      if (product && delta > product.stock_quantity) {
+        setError(
+          `Estoque insuficiente de "${product.name}" (disponível: ${product.stock_quantity}).`
+        );
+        return;
+      }
+    }
+    setError(null);
+
     setBusy(true);
+
+    await supabase.rpc("adjust_stock", {
+      p_tenant_id: tenantId,
+      p_product_id: item.product_id,
+      p_delta: -delta,
+      p_movement_type: delta > 0 ? "OUT" : "IN",
+    });
+
     if (newQty <= 0) {
       await supabase.from("comanda_items").delete().eq("id", itemId);
     } else {

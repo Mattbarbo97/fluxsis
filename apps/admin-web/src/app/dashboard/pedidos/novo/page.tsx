@@ -13,7 +13,7 @@ export default async function NovoPedidoPage() {
       .order("name", { ascending: true }),
     supabase
       .from("products")
-      .select("id, name, price, volume, stock_quantity")
+      .select("id, name, price, volume")
       .eq("status", "ACTIVE")
       .order("name", { ascending: true }),
   ]);

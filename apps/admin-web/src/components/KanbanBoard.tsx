@@ -54,11 +54,6 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
 
   async function updateStatus(id: string, order_status: string) {
     setSavingId(id);
-
-    const current = rows.find((o) => o.id === id);
-    const isCancelling =
-      order_status === "CANCELLED" && current?.order_status !== "CANCELLED";
-
     const { error } = await supabase
       .from("orders")
       .update({ order_status })
@@ -68,27 +63,6 @@ export default function KanbanBoard({ orders }: { orders: Order[] }) {
       setRows((prev) =>
         prev.map((o) => (o.id === id ? { ...o, order_status } : o))
       );
-
-      // Cancelar um pedido devolve os itens pro estoque.
-      if (isCancelling) {
-        const { data: order } = await supabase
-          .from("orders")
-          .select("tenant_id, order_items(product_id, quantity)")
-          .eq("id", id)
-          .single();
-
-        if (order?.tenant_id) {
-          for (const item of (order as any).order_items ?? []) {
-            await supabase.rpc("adjust_stock", {
-              p_tenant_id: order.tenant_id,
-              p_product_id: item.product_id,
-              p_delta: item.quantity,
-              p_movement_type: "IN",
-              p_reference_order_id: id,
-            });
-          }
-        }
-      }
     }
     setSavingId(null);
   }

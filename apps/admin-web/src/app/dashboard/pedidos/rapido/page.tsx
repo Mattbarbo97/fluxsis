@@ -12,7 +12,6 @@ type Product = {
   price: number;
   volume: string | null;
   composition: string | null;
-  stock_quantity: number;
 };
 
 type CartItem = {
@@ -48,7 +47,7 @@ export default function PedidoRapidoPage() {
   useEffect(() => {
     supabase
       .from("products")
-      .select("id, name, price, volume, composition, stock_quantity")
+      .select("id, name, price, volume, composition")
       .eq("status", "ACTIVE")
       .order("name")
       .then(({ data }) => {
@@ -131,26 +130,6 @@ export default function PedidoRapidoPage() {
 
   async function finalizeSale() {
     if (cart.length === 0) return;
-
-    // Soma quantidade por produto (um produto pode aparecer em mais de uma
-    // linha do carrinho, com composições diferentes) e valida contra o estoque.
-    const totalsByProduct = new Map<string, number>();
-    for (const item of cart) {
-      totalsByProduct.set(
-        item.product.id,
-        (totalsByProduct.get(item.product.id) ?? 0) + item.quantity
-      );
-    }
-    for (const [productId, qty] of totalsByProduct) {
-      const product = products.find((p) => p.id === productId)!;
-      if (qty > product.stock_quantity) {
-        alert(
-          `Estoque insuficiente de "${product.name}" (disponível: ${product.stock_quantity}).`
-        );
-        return;
-      }
-    }
-
     setSaving(true);
 
     const tenantId = await getCurrentTenantIdClient(supabase);
@@ -158,10 +137,6 @@ export default function PedidoRapidoPage() {
       setSaving(false);
       return;
     }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     let { data: customer } = await supabase
       .from("customers")
@@ -215,17 +190,6 @@ export default function PedidoRapidoPage() {
         }))
       );
 
-      for (const [productId, qty] of totalsByProduct) {
-        await supabase.rpc("adjust_stock", {
-          p_tenant_id: tenantId,
-          p_product_id: productId,
-          p_delta: -qty,
-          p_movement_type: "OUT",
-          p_reference_order_id: order.id,
-          p_created_by: user?.id ?? null,
-        });
-      }
-
       window.open(`/imprimir/pedido/${order.id}`, "_blank");
       setCart([]);
       setCustomerName("");
@@ -271,9 +235,6 @@ export default function PedidoRapidoPage() {
               {p.composition && (
                 <p className="text-xs text-amber-400">🍽️ personalizável</p>
               )}
-              <p className="text-xs text-neutral-500">
-                {p.stock_quantity} em estoque
-              </p>
               <p className="mt-1 text-sm text-emerald-400">
                 R$ {p.price.toFixed(2)}
               </p>

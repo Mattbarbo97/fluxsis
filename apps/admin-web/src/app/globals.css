@@ -39,9 +39,6 @@ body {
     visibility: visible;
   }
   .receipt-80mm {
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 76mm;
   }
   .no-print {

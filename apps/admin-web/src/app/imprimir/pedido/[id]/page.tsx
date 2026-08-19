@@ -21,20 +21,20 @@ function Receipt({
   order,
   tenantName,
   via,
+  showValues,
   font,
 }: {
   order: any;
   tenantName: string;
   via: "ESTABELECIMENTO" | "CLIENTE" | null;
+  showValues: boolean;
   font: typeof FONT_SIZES["normal"];
 }) {
   return (
-    <div className="receipt-80mm mb-4 bg-white p-2 font-mono text-black" style={{ breakAfter: "page" }}>
+    <div className="receipt-80mm mb-2 bg-white p-2 font-mono text-black">
       <div className="mb-2 text-center">
         <p className={`${font.title} font-bold`}>{tenantName}</p>
-        {via && (
-          <p className="font-bold">— VIA {via} —</p>
-        )}
+        {via && <p className="font-bold">— VIA {via} —</p>}
         <p className={font.base}>Pedido #{order.order_number}</p>
         <p className={font.base}>
           {new Date(order.created_at).toLocaleString("pt-BR")}
@@ -70,37 +70,45 @@ function Receipt({
               {item.notes}
             </div>
           )}
-          <div className={`flex justify-between ${font.base} text-neutral-700`}>
-            <span>R$ {item.unit_price.toFixed(2)} un.</span>
-            <span>R$ {(item.unit_price * item.quantity).toFixed(2)}</span>
-          </div>
+          {showValues && (
+            <div className={`flex justify-between ${font.base} text-neutral-700`}>
+              <span>R$ {item.unit_price.toFixed(2)} un.</span>
+              <span>R$ {(item.unit_price * item.quantity).toFixed(2)}</span>
+            </div>
+          )}
         </div>
       ))}
-      <hr className="my-1 border-dashed border-black" />
-      <div className={font.base}>
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>R$ {order.subtotal.toFixed(2)}</span>
-        </div>
-        {order.discount > 0 && (
-          <div className="flex justify-between">
-            <span>Desconto</span>
-            <span>- R$ {order.discount.toFixed(2)}</span>
+
+      {showValues && (
+        <>
+          <hr className="my-1 border-dashed border-black" />
+          <div className={font.base}>
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>R$ {order.subtotal.toFixed(2)}</span>
+            </div>
+            {order.discount > 0 && (
+              <div className="flex justify-between">
+                <span>Desconto</span>
+                <span>- R$ {order.discount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span>Entrega</span>
+              <span>R$ {order.delivery_fee.toFixed(2)}</span>
+            </div>
+            <div className={`flex justify-between ${font.total} font-bold`}>
+              <span>TOTAL</span>
+              <span>R$ {order.total.toFixed(2)}</span>
+            </div>
           </div>
-        )}
-        <div className="flex justify-between">
-          <span>Entrega</span>
-          <span>R$ {order.delivery_fee.toFixed(2)}</span>
-        </div>
-        <div className={`flex justify-between ${font.total} font-bold`}>
-          <span>TOTAL</span>
-          <span>R$ {order.total.toFixed(2)}</span>
-        </div>
-      </div>
-      <hr className="my-1 border-dashed border-black" />
-      <p className={font.base}>
-        Pagamento: {PAYMENT_LABEL[order.payment_status]}
-      </p>
+          <hr className="my-1 border-dashed border-black" />
+          <p className={font.base}>
+            Pagamento: {PAYMENT_LABEL[order.payment_status]}
+          </p>
+        </>
+      )}
+
       {order.notes && <p className={font.base}>Obs: {order.notes}</p>}
       <p className={`mt-3 text-center ${font.base}`}>Obrigado pela preferência!</p>
     </div>
@@ -178,11 +186,12 @@ export default function ImprimirPedidoPage() {
 
       {hasTicket ? (
         <>
-          <Receipt order={order} tenantName={tenantName} via="ESTABELECIMENTO" font={font} />
-          <Receipt order={order} tenantName={tenantName} via="CLIENTE" font={font} />
+          <Receipt order={order} tenantName={tenantName} via="ESTABELECIMENTO" showValues={false} font={font} />
+          <p className="no-print my-2 text-center text-xs text-neutral-500">✂ ------------------------- ✂</p>
+          <Receipt order={order} tenantName={tenantName} via="CLIENTE" showValues={true} font={font} />
         </>
       ) : (
-        <Receipt order={order} tenantName={tenantName} via={null} font={font} />
+        <Receipt order={order} tenantName={tenantName} via={null} showValues={true} font={font} />
       )}
 
       <button

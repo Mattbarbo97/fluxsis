@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
@@ -31,7 +31,7 @@ function Receipt({
   font: typeof FONT_SIZES["normal"];
 }) {
   return (
-    <div className="receipt-80mm mb-2 bg-white p-2 font-mono text-black">
+    <div className="bg-white p-2 font-mono text-black">
       <div className="mb-2 text-center">
         <p className={`${font.title} font-bold`}>{tenantName}</p>
         {via && <p className="font-bold">— VIA {via} —</p>}
@@ -121,6 +121,8 @@ export default function ImprimirPedidoPage() {
   const [order, setOrder] = useState<any>(null);
   const [tenantName, setTenantName] = useState("");
   const [fontSize, setFontSize] = useState<"normal" | "grande">("normal");
+  const [activeVia, setActiveVia] = useState<"ESTABELECIMENTO" | "CLIENTE">("CLIENTE");
+  const sequencing = useRef(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("fluxsis_print_font");
@@ -155,6 +157,20 @@ export default function ImprimirPedidoPage() {
       });
   }, [params.id]);
 
+  // Depois de imprimir a via Estabelecimento (dentro da sequência automática),
+  // troca pra via Cliente e dispara a segunda impressão sozinho.
+  useEffect(() => {
+    function handleAfterPrint() {
+      if (sequencing.current && activeVia === "ESTABELECIMENTO") {
+        sequencing.current = false;
+        setActiveVia("CLIENTE");
+        setTimeout(() => window.print(), 400);
+      }
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, [activeVia]);
+
   if (!order) {
     return <p className="p-4 text-sm text-neutral-500">Carregando...</p>;
   }
@@ -162,44 +178,83 @@ export default function ImprimirPedidoPage() {
   const font = FONT_SIZES[fontSize];
   const hasTicket = Boolean(order.ticket_number);
 
+  function printBothInSequence() {
+    sequencing.current = true;
+    setActiveVia("ESTABELECIMENTO");
+    setTimeout(() => window.print(), 100);
+  }
+
+  function printSingle(via: "ESTABELECIMENTO" | "CLIENTE") {
+    sequencing.current = false;
+    setActiveVia(via);
+    setTimeout(() => window.print(), 100);
+  }
+
   return (
     <div>
-      <div className="no-print mx-auto mb-4 flex max-w-xs items-center justify-center gap-2 p-2">
-        <span className="text-xs text-neutral-400">Tamanho da fonte:</span>
-        <button
-          onClick={() => changeFontSize("normal")}
-          className={`rounded-md px-3 py-1 text-xs ${
-            fontSize === "normal" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
-          }`}
-        >
-          Normal
-        </button>
-        <button
-          onClick={() => changeFontSize("grande")}
-          className={`rounded-md px-3 py-1 text-xs ${
-            fontSize === "grande" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
-          }`}
-        >
-          Grande
-        </button>
+      <div className="no-print mx-auto mb-4 flex max-w-xs flex-col items-center gap-3 p-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-neutral-400">Fonte:</span>
+          <button
+            onClick={() => changeFontSize("normal")}
+            className={`rounded-md px-3 py-1 text-xs ${
+              fontSize === "normal" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+            }`}
+          >
+            Normal
+          </button>
+          <button
+            onClick={() => changeFontSize("grande")}
+            className={`rounded-md px-3 py-1 text-xs ${
+              fontSize === "grande" ? "bg-emerald-600 text-white" : "bg-neutral-800 text-neutral-300"
+            }`}
+          >
+            Grande
+          </button>
+        </div>
+
+        {hasTicket ? (
+          <>
+            <button
+              onClick={printBothInSequence}
+              className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Imprimir as 2 vias (sequência)
+            </button>
+            <div className="flex w-full gap-2">
+              <button
+                onClick={() => printSingle("ESTABELECIMENTO")}
+                className="flex-1 rounded-lg border border-neutral-700 px-3 py-2 text-xs text-white"
+              >
+                Só estabelecimento
+              </button>
+              <button
+                onClick={() => printSingle("CLIENTE")}
+                className="flex-1 rounded-lg border border-neutral-700 px-3 py-2 text-xs text-white"
+              >
+                Só cliente
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            onClick={() => printSingle("CLIENTE")}
+            className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Imprimir
+          </button>
+        )}
       </div>
 
-      {hasTicket ? (
-        <>
-          <Receipt order={order} tenantName={tenantName} via="ESTABELECIMENTO" showValues={false} font={font} />
-          <p className="no-print my-2 text-center text-xs text-neutral-500">✂ ------------------------- ✂</p>
-          <Receipt order={order} tenantName={tenantName} via="CLIENTE" showValues={true} font={font} />
-        </>
-      ) : (
-        <Receipt order={order} tenantName={tenantName} via={null} showValues={true} font={font} />
-      )}
-
-      <button
-        onClick={() => window.print()}
-        className="no-print mx-auto block w-full max-w-xs rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-      >
-        Imprimir
-      </button>
+      <div className="receipt-80mm">
+        <Receipt
+          order={order}
+          tenantName={tenantName}
+          via={hasTicket ? activeVia : null}
+          showValues={hasTicket ? activeVia === "CLIENTE" : true}
+          font={font}
+        />
+      </div>
     </div>
   );
 }

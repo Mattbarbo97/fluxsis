@@ -13,7 +13,7 @@ type Table = {
   sector_id: string | null;
   assigned_waiter_id: string | null;
 };
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
 type Member = { id: string; display_name: string | null };
 
 export default function MesasPage() {
@@ -50,7 +50,7 @@ export default function MesasPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, price, volume")
+        .select("id, name, price, volume, stock_quantity")
         .eq("status", "ACTIVE")
         .order("name"),
       supabase.from("tenant_members").select("id, display_name"),

@@ -22,7 +22,7 @@ export default async function PedidosPage() {
         .order("name", { ascending: true }),
       supabase
         .from("products")
-        .select("id, name, price, volume")
+        .select("id, name, price, volume, stock_quantity")
         .eq("status", "ACTIVE")
         .order("name", { ascending: true }),
     ]);

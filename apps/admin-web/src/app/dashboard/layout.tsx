@@ -6,10 +6,13 @@ const NAV_ITEMS = [
   { href: "/dashboard/categorias", label: "Categorias" },
   { href: "/dashboard/pedidos", label: "Pedidos" },
   { href: "/dashboard/mesas", label: "Mesas" },
+  { href: "/dashboard/caixa", label: "Caixa" },
+  { href: "/dashboard/relatorios", label: "Relatórios" },
   { href: "/dashboard/clientes", label: "Clientes" },
   { href: "/dashboard/entregas", label: "Entregas" },
   { href: "/dashboard/mensagens", label: "Mensagens" },
   { href: "/dashboard/configuracoes", label: "Configurações" },
+  { href: "/dashboard/superadmin", label: "Super Admin" },
 ];
 
 export default function DashboardLayout({

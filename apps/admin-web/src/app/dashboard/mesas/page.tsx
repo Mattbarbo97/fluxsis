@@ -13,8 +13,9 @@ type Table = {
   sector_id: string | null;
   assigned_waiter_id: string | null;
 };
-type Product = { id: string; name: string; price: number; volume: string | null };
+type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
 type Member = { id: string; display_name: string | null };
+type TableTotal = { subtotal: number; paid: number };
 
 export default function MesasPage() {
   const supabase = createClient();
@@ -23,6 +24,7 @@ export default function MesasPage() {
   const [tables, setTables] = useState<Table[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [tableTotals, setTableTotals] = useState<Record<string, TableTotal>>({});
   const [loading, setLoading] = useState(true);
 
   const [newSectorName, setNewSectorName] = useState("");
@@ -42,6 +44,7 @@ export default function MesasPage() {
       { data: tableData },
       { data: productData },
       { data: memberData },
+      { data: openComandas },
     ] = await Promise.all([
       supabase.from("sectors").select("id, name").order("name"),
       supabase
@@ -50,16 +53,42 @@ export default function MesasPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, price, volume")
+        .select("id, name, price, volume, stock_quantity")
         .eq("status", "ACTIVE")
         .order("name"),
       supabase.from("tenant_members").select("id, display_name"),
+      supabase
+        .from("comandas")
+        .select(
+          "table_id, comanda_items(quantity, unit_price), comanda_payments(amount)"
+        )
+        .eq("status", "OPEN"),
     ]);
 
     setSectors(sectorData ?? []);
     setTables(tableData ?? []);
     setProducts(productData ?? []);
     setMembers(memberData ?? []);
+
+    const totals: Record<string, TableTotal> = {};
+    (openComandas ?? []).forEach((c: any) => {
+      if (!c.table_id) return;
+      const subtotal = (c.comanda_items ?? []).reduce(
+        (s: number, i: any) => s + i.unit_price * i.quantity,
+        0
+      );
+      const paid = (c.comanda_payments ?? []).reduce(
+        (s: number, p: any) => s + p.amount,
+        0
+      );
+      // Uma mesa pode, em teoria, ter mais de uma comanda aberta simultaneamente.
+      const existing = totals[c.table_id];
+      totals[c.table_id] = existing
+        ? { subtotal: existing.subtotal + subtotal, paid: existing.paid + paid }
+        : { subtotal, paid };
+    });
+    setTableTotals(totals);
+
     setLoading(false);
   }
 
@@ -212,6 +241,7 @@ export default function MesasPage() {
                     key={t.id}
                     table={t}
                     members={members}
+                    total={tableTotals[t.id]}
                     onOpen={() => openTable(t)}
                     onAssignWaiter={(waiterId) => assignWaiter(t.id, waiterId)}
                   />
@@ -232,6 +262,7 @@ export default function MesasPage() {
                 key={t.id}
                 table={t}
                 members={members}
+                total={tableTotals[t.id]}
                 onOpen={() => openTable(t)}
                 onAssignWaiter={(waiterId) => assignWaiter(t.id, waiterId)}
               />
@@ -258,15 +289,19 @@ export default function MesasPage() {
 function TableCard({
   table,
   members,
+  total,
   onOpen,
   onAssignWaiter,
 }: {
   table: Table;
   members: Member[];
+  total?: TableTotal;
   onOpen: () => void;
   onAssignWaiter: (waiterId: string) => void;
 }) {
   const isFree = table.status === "FREE";
+  const remaining = total ? total.subtotal - total.paid : 0;
+  const hasPartialPayment = !!total && total.paid > 0 && remaining > 0;
 
   return (
     <div
@@ -285,6 +320,16 @@ function TableCard({
         >
           {isFree ? "Livre" : "Ocupada"}
         </p>
+        {!isFree && total && total.subtotal > 0 && (
+          <p className="mt-1 text-sm font-semibold text-emerald-400">
+            R$ {total.subtotal.toFixed(2)}
+          </p>
+        )}
+        {hasPartialPayment && (
+          <p className="text-[11px] text-neutral-400">
+            Falta R$ {remaining.toFixed(2)}
+          </p>
+        )}
       </button>
       <select
         value={table.assigned_waiter_id ?? ""}

@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Recibo térmico 80mm */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 2mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .receipt-80mm,
+  .receipt-80mm * {
+    visibility: visible;
+  }
+  .receipt-80mm {
+    width: 76mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

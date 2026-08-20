@@ -13,6 +13,7 @@ type ProductFormValues = {
   volume: string;
   price: string;
   cost_price: string;
+  composition: string;
   stock_quantity: string;
   min_stock: string;
   status: string;
@@ -26,6 +27,7 @@ const EMPTY: ProductFormValues = {
   volume: "",
   price: "",
   cost_price: "",
+  composition: "",
   stock_quantity: "0",
   min_stock: "0",
   status: "ACTIVE",
@@ -51,13 +53,41 @@ export default function ProductForm({
   const [saving, setSaving] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [savingCategory, setSavingCategory] = useState(false);
 
-  useEffect(() => {
-    supabase
+  async function loadCategories() {
+    const { data } = await supabase
       .from("categories")
       .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => setCategories(data ?? []));
+      .order("name", { ascending: true });
+    setCategories(data ?? []);
+  }
+
+  async function handleAddCategory() {
+    if (!newCategoryName.trim()) return;
+    setSavingCategory(true);
+
+    const { data, error } = await supabase
+      .from("categories")
+      .insert({ tenant_id: tenantId, name: newCategoryName.trim() })
+      .select("id, name")
+      .single();
+
+    if (!error && data) {
+      setCategories((prev) =>
+        [...prev, data].sort((a, b) => a.name.localeCompare(b.name))
+      );
+      handleChange("category_id", data.id);
+      setNewCategoryName("");
+      setAddingCategory(false);
+    }
+    setSavingCategory(false);
+  }
+
+  useEffect(() => {
+    loadCategories();
   }, []);
 
   const isEditing = Boolean(initialProduct?.id);
@@ -93,6 +123,7 @@ export default function ProductForm({
       volume: values.volume || null,
       price: Number(values.price),
       cost_price: values.cost_price ? Number(values.cost_price) : null,
+      composition: values.composition || null,
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
       status: values.status,
@@ -222,6 +253,22 @@ export default function ProductForm({
         </div>
       </div>
 
+      <div>
+        <label className="mb-1 block text-sm text-neutral-300">
+          Composição padrão (opcional)
+        </label>
+        <input
+          value={values.composition}
+          onChange={(e) => handleChange("composition", e.target.value)}
+          placeholder="Ex: Arroz, Feijão, Costela, Farofa"
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
+        />
+        <p className="mt-1 text-xs text-neutral-500">
+          Separe por vírgula. No Pedido Rápido, o atendente poderá remover
+          itens (ex: "sem farofa") na hora de montar o pedido.
+        </p>
+      </div>
+
       {values.price && values.cost_price && Number(values.cost_price) > 0 && (
         <p className="text-sm text-neutral-400">
           Margem estimada:{" "}
@@ -267,9 +314,43 @@ export default function ProductForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm text-neutral-300">
-          Categoria
-        </label>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="block text-sm text-neutral-300">Categoria</label>
+          <button
+            type="button"
+            onClick={() => setAddingCategory((v) => !v)}
+            className="text-xs text-emerald-400 hover:text-emerald-300"
+          >
+            {addingCategory ? "Cancelar" : "+ Nova categoria"}
+          </button>
+        </div>
+
+        {addingCategory && (
+          <div className="mb-2 flex gap-2">
+            <input
+              autoFocus
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAddCategory();
+                }
+              }}
+              placeholder="Ex: Sucos"
+              className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+            />
+            <button
+              type="button"
+              onClick={handleAddCategory}
+              disabled={savingCategory || !newCategoryName.trim()}
+              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {savingCategory ? "..." : "Adicionar"}
+            </button>
+          </div>
+        )}
+
         <select
           value={values.category_id}
           onChange={(e) => handleChange("category_id", e.target.value)}

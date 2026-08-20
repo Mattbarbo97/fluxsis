@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { getCurrentTenantId } from "@/lib/tenant";
+import Link from "next/link";
 import KanbanBoard from "@/components/KanbanBoard";
 import NewOrderModalButton from "@/components/NewOrderModalButton";
 
@@ -21,7 +22,7 @@ export default async function PedidosPage() {
         .order("name", { ascending: true }),
       supabase
         .from("products")
-        .select("id, name, price, volume")
+        .select("id, name, price, volume, stock_quantity")
         .eq("status", "ACTIVE")
         .order("name", { ascending: true }),
     ]);
@@ -36,11 +37,19 @@ export default async function PedidosPage() {
           </p>
         </div>
         {tenantId && (
-          <NewOrderModalButton
-            tenantId={tenantId}
-            customers={customers ?? []}
-            products={products ?? []}
-          />
+          <div className="flex gap-2">
+            <Link
+              href="/dashboard/pedidos/rapido"
+              className="rounded-lg border border-neutral-700 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              ⚡ Pedido rápido
+            </Link>
+            <NewOrderModalButton
+              tenantId={tenantId}
+              customers={customers ?? []}
+              products={products ?? []}
+            />
+          </div>
         )}
       </div>
 

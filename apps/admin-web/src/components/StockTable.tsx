@@ -14,6 +14,7 @@ type Product = {
   stock_quantity: number;
   min_stock: number;
   status: string;
+  categories: { name: string } | null;
 };
 
 export default function StockTable({ products }: { products: Product[] }) {
@@ -36,6 +37,22 @@ export default function StockTable({ products }: { products: Product[] }) {
       return matchesSearch && (!onlyLowStock || isLow);
     });
   }, [rows, search, onlyLowStock]);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, Product[]>();
+    for (const p of filtered) {
+      const key = p.categories?.name ?? "Sem categoria";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(p);
+    }
+    const entries = Array.from(groups.entries());
+    entries.sort((a, b) => {
+      if (a[0] === "Sem categoria") return 1;
+      if (b[0] === "Sem categoria") return -1;
+      return a[0].localeCompare(b[0]);
+    });
+    return entries;
+  }, [filtered]);
 
   const allFilteredSelected =
     filtered.length > 0 && filtered.every((p) => selected.has(p.id));
@@ -219,8 +236,14 @@ export default function StockTable({ products }: { products: Product[] }) {
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-800 bg-neutral-950">
-            {filtered.map((product) => {
+          {grouped.map(([categoryName, items]) => (
+            <tbody key={categoryName} className="divide-y divide-neutral-800 bg-neutral-950">
+              <tr className="bg-neutral-900/60">
+                <td colSpan={8} className="px-4 py-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  {categoryName} <span className="text-neutral-600">({items.length})</span>
+                </td>
+              </tr>
+              {items.map((product) => {
               const isLow = product.stock_quantity <= product.min_stock;
               return (
                 <tr key={product.id}>
@@ -296,9 +319,12 @@ export default function StockTable({ products }: { products: Product[] }) {
                   </td>
                 </tr>
               );
-            })}
+              })}
+            </tbody>
+          ))}
 
-            {filtered.length === 0 && (
+          {filtered.length === 0 && (
+            <tbody>
               <tr>
                 <td
                   colSpan={8}
@@ -307,8 +333,8 @@ export default function StockTable({ products }: { products: Product[] }) {
                   Nenhum produto encontrado com esse filtro.
                 </td>
               </tr>
-            )}
-          </tbody>
+            </tbody>
+          )}
         </table>
       </div>
     </div>

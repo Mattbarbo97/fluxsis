@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { getCurrentTenantId } from "@/lib/tenant";
+import WhatsappConfigForm from "@/components/WhatsappConfigForm";
+import ResetTicketCounterButton from "@/components/ResetTicketCounterButton";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Ativo",
@@ -39,7 +41,7 @@ export default async function ConfiguracoesPage() {
       </p>
 
       {tenant && (
-        <div className="max-w-md space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+        <div className="mb-6 max-w-md space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-5">
           <div className="flex justify-between text-sm">
             <span className="text-neutral-400">Nome</span>
             <span className="text-white">{tenant.name}</span>
@@ -65,7 +67,22 @@ export default async function ConfiguracoesPage() {
         </div>
       )}
 
-      <div className="mt-6 max-w-md rounded-xl border border-dashed border-neutral-800 p-4 text-sm text-neutral-500">
+      {tenantId && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-medium text-neutral-300">
+            WhatsApp
+          </h2>
+          <WhatsappConfigForm tenantId={tenantId} />
+        </div>
+      )}
+
+      {tenantId && (
+        <div className="mb-6">
+          <ResetTicketCounterButton tenantId={tenantId} />
+        </div>
+      )}
+
+      <div className="max-w-md rounded-xl border border-dashed border-neutral-800 p-4 text-sm text-neutral-500">
         Cobrança recorrente automática ainda não está conectada. Isso
         depende de escolher e contratar um provedor de pagamentos
         recorrentes (ex: Stripe, Asaas, Iugu) antes de integrar os

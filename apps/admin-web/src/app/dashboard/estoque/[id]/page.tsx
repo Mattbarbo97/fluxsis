@@ -15,7 +15,7 @@ export default async function EditarProdutoPage({
   const { data: product } = await supabase
     .from("products")
     .select(
-      "id, name, sku, barcode, volume, price, cost_price, stock_quantity, min_stock, status, category_id"
+      "id, name, sku, barcode, volume, price, cost_price, stock_quantity, min_stock, status, category_id, composition"
     )
     .eq("id", id)
     .maybeSingle();
@@ -42,6 +42,7 @@ export default async function EditarProdutoPage({
           min_stock: String(product.min_stock),
           status: product.status,
           category_id: product.category_id ?? "",
+          composition: product.composition ?? "",
         }}
       />
     </div>

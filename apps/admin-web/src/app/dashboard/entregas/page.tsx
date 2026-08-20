@@ -79,7 +79,7 @@ export default function EntregasPage() {
         </h2>
         {tenantId && (
           <div className="mb-4 max-w-lg">
-            <DriverForm tenantId={tenantId} onSuccess={load} />
+            <DriverForm onSuccess={load} />
           </div>
         )}
 

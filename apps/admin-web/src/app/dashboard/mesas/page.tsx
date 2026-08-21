@@ -19,7 +19,7 @@ type Product = {
   price: number;
   volume: string | null;
   has_composition: boolean;
-  composition_items: { name: string; extra_price: number }[];
+  composition_items: { name: string; extra_price: number; required?: boolean }[];
   stock_quantity: number;
 };
 type Member = { id: string; display_name: string | null };

@@ -3,19 +3,31 @@
 import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 
-export type CompositionItem = { name: string; extra_price: number };
+export type CompositionItem = {
+  name: string;
+  extra_price: number;
+  // Comum/obrigatório = vem incluso por padrão, o cliente pode tirar.
+  // Opcional = não vem por padrão, o cliente escolhe se quer adicionar.
+  // Itens antigos (de antes desse campo existir) não têm essa propriedade;
+  // nesse caso, tratamos como obrigatório só quando o preço é zero, pra
+  // manter o comportamento de antes.
+  required?: boolean;
+};
 
 export type CompositionResult = {
   notes: string | null;
   extraPrice: number;
 };
 
+export function isRequiredItem(item: CompositionItem): boolean {
+  return item.required ?? item.extra_price === 0;
+}
+
 /**
- * Itens com preço adicional 0 vêm marcados por padrão (fazem parte da
- * composição base): desmarcar gera "SEM: <nome>", manter marcado não
- * aparece em lugar nenhum. Itens com preço adicional > 0 vêm desmarcados
- * por padrão (são opcionais/adicionais): marcar soma o preço e aparece
- * "+ <nome> (R$ X)".
+ * Itens "comuns" (required=true) vêm marcados por padrão: desmarcar gera
+ * "SEM: <nome>", manter marcado não aparece em lugar nenhum. Itens
+ * "opcionais" (required=false) vêm desmarcados por padrão: marcar soma o
+ * preço (se houver) e aparece "+ <nome>".
  */
 export function buildCompositionResult(
   items: CompositionItem[],
@@ -26,8 +38,9 @@ export function buildCompositionResult(
   let extraPrice = 0;
 
   items.forEach((item) => {
-    const isChecked = checked[item.name] ?? item.extra_price === 0;
-    if (item.extra_price === 0) {
+    const required = isRequiredItem(item);
+    const isChecked = checked[item.name] ?? required;
+    if (required) {
       if (!isChecked) removed.push(item.name);
     } else if (isChecked) {
       added.push(item);
@@ -40,7 +53,11 @@ export function buildCompositionResult(
   if (added.length > 0) {
     parts.push(
       `+ ${added
-        .map((a) => `${a.name} (R$ ${a.extra_price.toFixed(2)})`)
+        .map((a) =>
+          a.extra_price > 0
+            ? `${a.name} (R$ ${a.extra_price.toFixed(2)})`
+            : a.name
+        )
         .join(", ")}`
     );
   }
@@ -75,13 +92,13 @@ export default function CompositionPicker({
     if (!open) return;
     const initial: Record<string, boolean> = {};
     items.forEach((item) => {
-      initial[item.name] = item.extra_price === 0;
+      initial[item.name] = isRequiredItem(item);
     });
     setChecked(initial);
   }, [open, productName]);
 
-  const includedItems = items.filter((i) => i.extra_price === 0);
-  const extraItems = items.filter((i) => i.extra_price > 0);
+  const includedItems = items.filter((i) => isRequiredItem(i));
+  const extraItems = items.filter((i) => !isRequiredItem(i));
 
   const extraTotal = extraItems.reduce(
     (sum, item) => sum + (checked[item.name] ? item.extra_price : 0),
@@ -122,7 +139,7 @@ export default function CompositionPicker({
 
       {extraItems.length > 0 && (
         <div className="mb-4">
-          <p className="mb-2 text-sm text-neutral-400">Adicionais:</p>
+          <p className="mb-2 text-sm text-neutral-400">Opcionais:</p>
           <div className="space-y-2">
             {extraItems.map((item) => (
               <label
@@ -143,9 +160,11 @@ export default function CompositionPicker({
                   />
                   {item.name}
                 </span>
-                <span className="text-emerald-400">
-                  + R$ {item.extra_price.toFixed(2)}
-                </span>
+                {item.extra_price > 0 && (
+                  <span className="text-emerald-400">
+                    + R$ {item.extra_price.toFixed(2)}
+                  </span>
+                )}
               </label>
             ))}
           </div>

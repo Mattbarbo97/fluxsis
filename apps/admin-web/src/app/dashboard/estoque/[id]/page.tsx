@@ -50,6 +50,7 @@ export default async function EditarProdutoPage({
                 item.extra_price && Number(item.extra_price) > 0
                   ? String(item.extra_price)
                   : "",
+              required: item.required ?? item.extra_price === 0,
             })
           ),
         }}

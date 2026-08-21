@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { BEVERAGE_CATALOG } from "@/lib/beverage-catalog";
 
-type CompositionItemInput = { name: string; extra_price: string };
+type CompositionItemInput = { name: string; extra_price: string; required: boolean };
 
 type ProductFormValues = {
   id?: string;
@@ -109,7 +109,7 @@ export default function ProductForm({
       has_composition: enabled,
       composition_items:
         enabled && prev.composition_items.length === 0
-          ? [{ name: "", extra_price: "" }]
+          ? [{ name: "", extra_price: "", required: true }]
           : prev.composition_items,
     }));
   }
@@ -117,18 +117,21 @@ export default function ProductForm({
   function addCompositionItem() {
     setValues((prev) => ({
       ...prev,
-      composition_items: [...prev.composition_items, { name: "", extra_price: "" }],
+      composition_items: [
+        ...prev.composition_items,
+        { name: "", extra_price: "", required: true },
+      ],
     }));
   }
 
   function updateCompositionItem(
     index: number,
     field: keyof CompositionItemInput,
-    value: string
+    value: string | boolean
   ) {
     setValues((prev) => {
       const next = [...prev.composition_items];
-      next[index] = { ...next[index], [field]: value };
+      next[index] = { ...next[index], [field]: value } as CompositionItemInput;
       return { ...prev, composition_items: next };
     });
   }
@@ -157,13 +160,14 @@ export default function ProductForm({
     setError(null);
 
     // Só leva pro banco os itens com nome preenchido; preço vazio vira 0
-    // (item incluso, sem custo adicional).
+    // (sem custo adicional).
     const cleanCompositionItems = values.has_composition
       ? values.composition_items
           .filter((item) => item.name.trim() !== "")
           .map((item) => ({
             name: item.name.trim(),
             extra_price: item.extra_price ? Number(item.extra_price) : 0,
+            required: item.required,
           }))
       : [];
 
@@ -320,12 +324,19 @@ export default function ProductForm({
         {values.has_composition && (
           <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
             <p className="text-xs text-neutral-500">
-              Deixe o preço adicional em branco (ou 0) pra um ingrediente
-              incluso no prato — o cliente poderá tirar (ex: "sem farofa"),
-              sem alterar o preço. Preencha um valor pra um item opcional
-              (ex: "Linguiça +R$ 7,00") — o cliente escolhe se quer, e o
-              preço soma ao total.
+              Marque "Comum" pros ingredientes que vêm por padrão no prato
+              (ex: Arroz, Feijão, Farofa) — o cliente poderá tirar (ex: "sem
+              farofa"). Deixe desmarcado pros itens opcionais (ex: escolha de
+              carne) — o cliente decide se quer adicionar. Preencher um preço
+              é opcional em qualquer um dos dois casos.
             </p>
+
+            <div className="flex items-center gap-2 px-1 text-[11px] text-neutral-500">
+              <span className="flex-1">Ingrediente</span>
+              <span className="w-28 text-center">Preço adicional</span>
+              <span className="w-16 text-center">Comum</span>
+              <span className="w-4"></span>
+            </div>
 
             {values.composition_items.map((item, index) => (
               <div key={index} className="flex items-center gap-2">
@@ -347,6 +358,15 @@ export default function ProductForm({
                   }
                   placeholder="R$ 0,00"
                   className="w-28 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+                />
+                <input
+                  type="checkbox"
+                  checked={item.required}
+                  onChange={(e) =>
+                    updateCompositionItem(index, "required", e.target.checked)
+                  }
+                  title="Vem por padrão (o cliente pode tirar)"
+                  className="h-4 w-16 rounded border-neutral-600 bg-neutral-900"
                 />
                 <button
                   type="button"

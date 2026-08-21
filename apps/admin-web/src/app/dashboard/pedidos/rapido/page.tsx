@@ -4,20 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { getCurrentTenantIdClient } from "@/lib/tenant-client";
-import Modal from "@/components/Modal";
+import CompositionPicker, {
+  CompositionItem,
+} from "@/components/CompositionPicker";
 
 type Product = {
   id: string;
   name: string;
   price: number;
   volume: string | null;
-  composition: string | null;
+  has_composition: boolean;
+  composition_items: CompositionItem[];
   stock_quantity: number;
 };
 
 type CartItem = {
   product: Product;
   quantity: number;
+  unitPrice: number;
   notes: string | null;
 };
 
@@ -43,16 +47,15 @@ export default function PedidoRapidoPage() {
   const [loading, setLoading] = useState(true);
 
   const [compositionProduct, setCompositionProduct] = useState<Product | null>(null);
-  const [compositionChecked, setCompositionChecked] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     supabase
       .from("products")
-      .select("id, name, price, volume, composition, stock_quantity")
+      .select("id, name, price, volume, has_composition, composition_items, stock_quantity")
       .eq("status", "ACTIVE")
       .order("name")
       .then(({ data }) => {
-        setProducts(data ?? []);
+        setProducts((data as any) ?? []);
         setLoading(false);
       });
   }, []);
@@ -73,42 +76,37 @@ export default function PedidoRapidoPage() {
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...prev, { product, quantity: 1, notes: null }];
+      return [...prev, { product, quantity: 1, unitPrice: product.price, notes: null }];
     });
   }
 
-  function openCompositionPicker(product: Product) {
-    const items = product.composition!.split(",").map((s) => s.trim());
-    const initial: Record<string, boolean> = {};
-    items.forEach((i) => (initial[i] = true));
-    setCompositionChecked(initial);
-    setCompositionProduct(product);
-  }
-
-  function confirmComposition() {
+  function confirmComposition(result: { notes: string | null; extraPrice: number }) {
     if (!compositionProduct) return;
-    const removed = Object.entries(compositionChecked)
-      .filter(([, checked]) => !checked)
-      .map(([name]) => name);
-    const notes = removed.length > 0 ? `SEM: ${removed.join(", ")}` : null;
+    const unitPrice = compositionProduct.price + result.extraPrice;
 
     setCart((prev) => {
       const idx = prev.findIndex(
-        (i) => i.product.id === compositionProduct.id && i.notes === notes
+        (i) =>
+          i.product.id === compositionProduct.id &&
+          i.notes === result.notes &&
+          i.unitPrice === unitPrice
       );
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
         return next;
       }
-      return [...prev, { product: compositionProduct, quantity: 1, notes }];
+      return [
+        ...prev,
+        { product: compositionProduct, quantity: 1, unitPrice, notes: result.notes },
+      ];
     });
     setCompositionProduct(null);
   }
 
   function handleProductClick(product: Product) {
-    if (product.composition) {
-      openCompositionPicker(product);
+    if (product.has_composition && product.composition_items.length > 0) {
+      setCompositionProduct(product);
     } else {
       addSimple(product);
     }
@@ -127,7 +125,7 @@ export default function PedidoRapidoPage() {
     });
   }
 
-  const total = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+  const total = cart.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
 
   async function finalizeSale() {
     if (cart.length === 0) return;
@@ -210,7 +208,7 @@ export default function PedidoRapidoPage() {
           order_id: order.id,
           product_id: i.product.id,
           quantity: i.quantity,
-          unit_price: i.product.price,
+          unit_price: i.unitPrice,
           notes: i.notes,
         }))
       );
@@ -268,7 +266,7 @@ export default function PedidoRapidoPage() {
               {p.volume && (
                 <p className="text-xs text-neutral-500">{p.volume}</p>
               )}
-              {p.composition && (
+              {p.has_composition && p.composition_items.length > 0 && (
                 <p className="text-xs text-amber-400">🍽️ personalizável</p>
               )}
               <p className="text-xs text-neutral-500">
@@ -317,6 +315,11 @@ export default function PedidoRapidoPage() {
                 </div>
                 {item.notes && (
                   <p className="text-xs text-amber-400">{item.notes}</p>
+                )}
+                {item.unitPrice !== item.product.price && (
+                  <p className="text-xs text-neutral-500">
+                    R$ {item.unitPrice.toFixed(2)} cada
+                  </p>
                 )}
               </div>
             ))}
@@ -376,45 +379,14 @@ export default function PedidoRapidoPage() {
         </div>
       </div>
 
-      <Modal
+      <CompositionPicker
         open={compositionProduct !== null}
+        productName={compositionProduct?.name ?? ""}
+        basePrice={compositionProduct?.price ?? 0}
+        items={compositionProduct?.composition_items ?? []}
         onClose={() => setCompositionProduct(null)}
-        title={compositionProduct?.name ?? ""}
-      >
-        <p className="mb-3 text-sm text-neutral-400">
-          Desmarque o que o cliente não quer:
-        </p>
-        <div className="space-y-2">
-          {compositionProduct?.composition?.split(",").map((item) => {
-            const name = item.trim();
-            return (
-              <label
-                key={name}
-                className="flex items-center gap-2 text-sm text-white"
-              >
-                <input
-                  type="checkbox"
-                  checked={compositionChecked[name] ?? true}
-                  onChange={(e) =>
-                    setCompositionChecked((prev) => ({
-                      ...prev,
-                      [name]: e.target.checked,
-                    }))
-                  }
-                  className="h-4 w-4 rounded border-neutral-600 bg-neutral-900"
-                />
-                {name}
-              </label>
-            );
-          })}
-        </div>
-        <button
-          onClick={confirmComposition}
-          className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          Adicionar ao carrinho
-        </button>
-      </Modal>
+        onConfirm={confirmComposition}
+      />
     </div>
   );
 }

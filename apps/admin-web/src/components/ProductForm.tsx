@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { BEVERAGE_CATALOG } from "@/lib/beverage-catalog";
 
+type CompositionItemInput = { name: string; extra_price: string };
+
 type ProductFormValues = {
   id?: string;
   name: string;
@@ -13,7 +15,8 @@ type ProductFormValues = {
   volume: string;
   price: string;
   cost_price: string;
-  composition: string;
+  has_composition: boolean;
+  composition_items: CompositionItemInput[];
   stock_quantity: string;
   min_stock: string;
   status: string;
@@ -27,7 +30,8 @@ const EMPTY: ProductFormValues = {
   volume: "",
   price: "",
   cost_price: "",
-  composition: "",
+  has_composition: false,
+  composition_items: [],
   stock_quantity: "0",
   min_stock: "0",
   status: "ACTIVE",
@@ -99,6 +103,43 @@ export default function ProductForm({
     setValues((prev) => ({ ...prev, [field]: value }));
   }
 
+  function toggleHasComposition(enabled: boolean) {
+    setValues((prev) => ({
+      ...prev,
+      has_composition: enabled,
+      composition_items:
+        enabled && prev.composition_items.length === 0
+          ? [{ name: "", extra_price: "" }]
+          : prev.composition_items,
+    }));
+  }
+
+  function addCompositionItem() {
+    setValues((prev) => ({
+      ...prev,
+      composition_items: [...prev.composition_items, { name: "", extra_price: "" }],
+    }));
+  }
+
+  function updateCompositionItem(
+    index: number,
+    field: keyof CompositionItemInput,
+    value: string
+  ) {
+    setValues((prev) => {
+      const next = [...prev.composition_items];
+      next[index] = { ...next[index], [field]: value };
+      return { ...prev, composition_items: next };
+    });
+  }
+
+  function removeCompositionItem(index: number) {
+    setValues((prev) => ({
+      ...prev,
+      composition_items: prev.composition_items.filter((_, i) => i !== index),
+    }));
+  }
+
   function handleSelectSuggestion(name: string, volume: string) {
     setValues((prev) => ({ ...prev, name, volume }));
   }
@@ -115,6 +156,17 @@ export default function ProductForm({
     setSaving(true);
     setError(null);
 
+    // Só leva pro banco os itens com nome preenchido; preço vazio vira 0
+    // (item incluso, sem custo adicional).
+    const cleanCompositionItems = values.has_composition
+      ? values.composition_items
+          .filter((item) => item.name.trim() !== "")
+          .map((item) => ({
+            name: item.name.trim(),
+            extra_price: item.extra_price ? Number(item.extra_price) : 0,
+          }))
+      : [];
+
     const payload = {
       tenant_id: tenantId,
       name: values.name,
@@ -123,7 +175,8 @@ export default function ProductForm({
       volume: values.volume || null,
       price: Number(values.price),
       cost_price: values.cost_price ? Number(values.cost_price) : null,
-      composition: values.composition || null,
+      has_composition: values.has_composition && cleanCompositionItems.length > 0,
+      composition_items: cleanCompositionItems,
       stock_quantity: Number(values.stock_quantity),
       min_stock: Number(values.min_stock),
       status: values.status,
@@ -254,19 +307,66 @@ export default function ProductForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm text-neutral-300">
-          Composição padrão (opcional)
+        <label className="mb-2 flex items-center gap-2 text-sm text-neutral-300">
+          <input
+            type="checkbox"
+            checked={values.has_composition}
+            onChange={(e) => toggleHasComposition(e.target.checked)}
+            className="h-4 w-4 rounded border-neutral-600 bg-neutral-900"
+          />
+          Informar composição (ex: marmitex com ingredientes e adicionais)
         </label>
-        <input
-          value={values.composition}
-          onChange={(e) => handleChange("composition", e.target.value)}
-          placeholder="Ex: Arroz, Feijão, Costela, Farofa"
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white outline-none focus:border-emerald-500"
-        />
-        <p className="mt-1 text-xs text-neutral-500">
-          Separe por vírgula. No Pedido Rápido, o atendente poderá remover
-          itens (ex: "sem farofa") na hora de montar o pedido.
-        </p>
+
+        {values.has_composition && (
+          <div className="space-y-2 rounded-lg border border-neutral-800 bg-neutral-950 p-3">
+            <p className="text-xs text-neutral-500">
+              Deixe o preço adicional em branco (ou 0) pra um ingrediente
+              incluso no prato — o cliente poderá tirar (ex: "sem farofa"),
+              sem alterar o preço. Preencha um valor pra um item opcional
+              (ex: "Linguiça +R$ 7,00") — o cliente escolhe se quer, e o
+              preço soma ao total.
+            </p>
+
+            {values.composition_items.map((item, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  value={item.name}
+                  onChange={(e) =>
+                    updateCompositionItem(index, "name", e.target.value)
+                  }
+                  placeholder="Ex: Arroz, Linguiça..."
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={item.extra_price}
+                  onChange={(e) =>
+                    updateCompositionItem(index, "extra_price", e.target.value)
+                  }
+                  placeholder="R$ 0,00"
+                  className="w-28 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCompositionItem(index)}
+                  className="text-neutral-500 hover:text-red-400"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={addCompositionItem}
+              className="text-xs text-emerald-400 hover:text-emerald-300"
+            >
+              + Adicionar item
+            </button>
+          </div>
+        )}
       </div>
 
       {values.price && values.cost_price && Number(values.cost_price) > 0 && (

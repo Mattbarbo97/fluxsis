@@ -13,9 +13,17 @@ type Table = {
   sector_id: string | null;
   assigned_waiter_id: string | null;
 };
-type Product = { id: string; name: string; price: number; volume: string | null; stock_quantity: number };
+type Product = {
+  id: string;
+  name: string;
+  price: number;
+  volume: string | null;
+  has_composition: boolean;
+  composition_items: { name: string; extra_price: number }[];
+  stock_quantity: number;
+};
 type Member = { id: string; display_name: string | null };
-type TableTotal = { subtotal: number; paid: number };
+type TableComanda = { id: string; subtotal: number; paid: number };
 
 export default function MesasPage() {
   const supabase = createClient();
@@ -24,7 +32,7 @@ export default function MesasPage() {
   const [tables, setTables] = useState<Table[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [tableTotals, setTableTotals] = useState<Record<string, TableTotal>>({});
+  const [comandasByTable, setComandasByTable] = useState<Record<string, TableComanda[]>>({});
   const [loading, setLoading] = useState(true);
 
   const [newSectorName, setNewSectorName] = useState("");
@@ -33,6 +41,7 @@ export default function MesasPage() {
 
   const [activeComandaId, setActiveComandaId] = useState<string | null>(null);
   const [activeTableName, setActiveTableName] = useState("");
+  const [creatingComandaFor, setCreatingComandaFor] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -53,16 +62,17 @@ export default function MesasPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, price, volume, stock_quantity")
+        .select("id, name, price, volume, has_composition, composition_items, stock_quantity")
         .eq("status", "ACTIVE")
         .order("name"),
       supabase.from("tenant_members").select("id, display_name"),
       supabase
         .from("comandas")
         .select(
-          "table_id, comanda_items(quantity, unit_price), comanda_payments(amount)"
+          "id, table_id, opened_at, comanda_items(quantity, unit_price), comanda_payments(amount)"
         )
-        .eq("status", "OPEN"),
+        .eq("status", "OPEN")
+        .order("opened_at", { ascending: true }),
     ]);
 
     setSectors(sectorData ?? []);
@@ -70,7 +80,7 @@ export default function MesasPage() {
     setProducts(productData ?? []);
     setMembers(memberData ?? []);
 
-    const totals: Record<string, TableTotal> = {};
+    const grouped: Record<string, TableComanda[]> = {};
     (openComandas ?? []).forEach((c: any) => {
       if (!c.table_id) return;
       const subtotal = (c.comanda_items ?? []).reduce(
@@ -81,13 +91,10 @@ export default function MesasPage() {
         (s: number, p: any) => s + p.amount,
         0
       );
-      // Uma mesa pode, em teoria, ter mais de uma comanda aberta simultaneamente.
-      const existing = totals[c.table_id];
-      totals[c.table_id] = existing
-        ? { subtotal: existing.subtotal + subtotal, paid: existing.paid + paid }
-        : { subtotal, paid };
+      if (!grouped[c.table_id]) grouped[c.table_id] = [];
+      grouped[c.table_id].push({ id: c.id, subtotal, paid });
     });
-    setTableTotals(totals);
+    setComandasByTable(grouped);
 
     setLoading(false);
   }
@@ -126,34 +133,42 @@ export default function MesasPage() {
     load();
   }
 
-  async function openTable(table: Table) {
-    if (table.status === "FREE") {
-      const { data: comanda } = await supabase
-        .from("comandas")
-        .insert({ tenant_id: tenantId, table_id: table.id })
-        .select("id")
-        .single();
+  // Abre uma comanda já existente (o usuário clicou num dos chips "Comanda N").
+  function openComanda(table: Table, comandaId: string, index: number) {
+    const label = index > 0 ? `${table.name} — Comanda ${index}` : table.name;
+    setActiveComandaId(comandaId);
+    setActiveTableName(label);
+  }
 
+  // Cria uma comanda nova na mesa (mesa livre, ou "dividir" uma mesa já ocupada
+  // em outro grupo/comanda separada).
+  async function newComanda(table: Table) {
+    if (!tenantId || creatingComandaFor) return;
+    setCreatingComandaFor(table.id);
+
+    const { data: comanda } = await supabase
+      .from("comandas")
+      .insert({ tenant_id: tenantId, table_id: table.id })
+      .select("id")
+      .single();
+
+    if (table.status === "FREE") {
       await supabase
         .from("tables")
         .update({ status: "OCCUPIED" })
         .eq("id", table.id);
-
-      setActiveComandaId(comanda?.id ?? null);
-      setActiveTableName(table.name);
-      load();
-      return;
     }
 
-    const { data: comanda } = await supabase
-      .from("comandas")
-      .select("id")
-      .eq("table_id", table.id)
-      .eq("status", "OPEN")
-      .maybeSingle();
+    const existingCount = (comandasByTable[table.id] ?? []).length;
+    const label =
+      existingCount > 0
+        ? `${table.name} — Comanda ${existingCount + 1}`
+        : table.name;
 
     setActiveComandaId(comanda?.id ?? null);
-    setActiveTableName(table.name);
+    setActiveTableName(label);
+    setCreatingComandaFor(null);
+    load();
   }
 
   const tablesBySector = sectors.map((s) => ({
@@ -241,8 +256,12 @@ export default function MesasPage() {
                     key={t.id}
                     table={t}
                     members={members}
-                    total={tableTotals[t.id]}
-                    onOpen={() => openTable(t)}
+                    comandas={comandasByTable[t.id] ?? []}
+                    creating={creatingComandaFor === t.id}
+                    onOpenComanda={(comandaId, index) =>
+                      openComanda(t, comandaId, index)
+                    }
+                    onNewComanda={() => newComanda(t)}
                     onAssignWaiter={(waiterId) => assignWaiter(t.id, waiterId)}
                   />
                 ))}
@@ -262,8 +281,12 @@ export default function MesasPage() {
                 key={t.id}
                 table={t}
                 members={members}
-                total={tableTotals[t.id]}
-                onOpen={() => openTable(t)}
+                comandas={comandasByTable[t.id] ?? []}
+                creating={creatingComandaFor === t.id}
+                onOpenComanda={(comandaId, index) =>
+                  openComanda(t, comandaId, index)
+                }
+                onNewComanda={() => newComanda(t)}
                 onAssignWaiter={(waiterId) => assignWaiter(t.id, waiterId)}
               />
             ))}
@@ -289,19 +312,21 @@ export default function MesasPage() {
 function TableCard({
   table,
   members,
-  total,
-  onOpen,
+  comandas,
+  creating,
+  onOpenComanda,
+  onNewComanda,
   onAssignWaiter,
 }: {
   table: Table;
   members: Member[];
-  total?: TableTotal;
-  onOpen: () => void;
+  comandas: TableComanda[];
+  creating: boolean;
+  onOpenComanda: (comandaId: string, index: number) => void;
+  onNewComanda: () => void;
   onAssignWaiter: (waiterId: string) => void;
 }) {
-  const isFree = table.status === "FREE";
-  const remaining = total ? total.subtotal - total.paid : 0;
-  const hasPartialPayment = !!total && total.paid > 0 && remaining > 0;
+  const isFree = table.status === "FREE" && comandas.length === 0;
 
   return (
     <div
@@ -311,30 +336,61 @@ function TableCard({
           : "border-amber-800 bg-amber-950/30"
       }`}
     >
-      <button onClick={onOpen} className="mb-2 block w-full text-left">
+      <div className="mb-2">
         <p className="text-sm font-medium text-white">{table.name}</p>
-        <p
-          className={`text-xs ${
-            isFree ? "text-neutral-500" : "text-amber-400"
-          }`}
-        >
-          {isFree ? "Livre" : "Ocupada"}
+        <p className={`text-xs ${isFree ? "text-neutral-500" : "text-amber-400"}`}>
+          {isFree
+            ? "Livre"
+            : comandas.length > 1
+            ? `Ocupada — ${comandas.length} comandas`
+            : "Ocupada"}
         </p>
-        {!isFree && total && total.subtotal > 0 && (
-          <p className="mt-1 text-sm font-semibold text-emerald-400">
-            R$ {total.subtotal.toFixed(2)}
-          </p>
-        )}
-        {hasPartialPayment && (
-          <p className="text-[11px] text-neutral-400">
-            Falta R$ {remaining.toFixed(2)}
-          </p>
-        )}
-      </button>
+      </div>
+
+      {isFree ? (
+        <button
+          onClick={onNewComanda}
+          disabled={creating}
+          className="mb-2 w-full rounded-md border border-emerald-700 bg-emerald-950/40 px-2 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-50"
+        >
+          Abrir mesa
+        </button>
+      ) : (
+        <div className="mb-2 space-y-1">
+          {comandas.map((c, idx) => {
+            const remaining = c.subtotal - c.paid;
+            const hasPartial = c.paid > 0 && remaining > 0;
+            return (
+              <button
+                key={c.id}
+                onClick={() => onOpenComanda(c.id, comandas.length > 1 ? idx + 1 : 0)}
+                className="flex w-full items-center justify-between rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-left text-xs hover:border-emerald-600"
+              >
+                <span className="text-neutral-300">
+                  {comandas.length > 1 ? `Comanda ${idx + 1}` : "Comanda"}
+                  {hasPartial && (
+                    <span className="ml-1 text-amber-400">(parcial)</span>
+                  )}
+                </span>
+                <span className="font-semibold text-emerald-400">
+                  R$ {c.subtotal.toFixed(2)}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            onClick={onNewComanda}
+            disabled={creating}
+            className="w-full rounded-md border border-dashed border-neutral-700 px-2 py-1 text-[11px] text-neutral-400 hover:border-emerald-600 hover:text-emerald-400 disabled:opacity-50"
+          >
+            + Nova comanda
+          </button>
+        </div>
+      )}
+
       <select
         value={table.assigned_waiter_id ?? ""}
         onChange={(e) => onAssignWaiter(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
         className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-1.5 py-1 text-xs text-white outline-none focus:border-emerald-500"
       >
         <option value="">Sem garçom</option>
